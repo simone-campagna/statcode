@@ -8,12 +8,17 @@ import collections
 from .stats import Stats
 from .code_file import File
 
-ProjectEntry = collections.namedtuple('ProjectEntry', ('language', 'files', 'lines', 'bytes'))
+DirEntry = collections.namedtuple('DirEntry', ('language', 'files', 'lines', 'bytes'))
 FileEntry = collections.namedtuple('FileEntry', ('language', 'lines', 'bytes', 'filepath'))
+ProjectEntry = collections.namedtuple('ProjectEntry', ('projects', 'files', 'lines', 'bytes'))
+
+_FIELDS = DirEntry._fields 
+_FIELDS += tuple(filter(lambda f: not f in _FIELDS, FileEntry._fields))
+_FIELDS += tuple(filter(lambda f: not f in _FIELDS, ProjectEntry._fields))
 
 class SortKey(object):
+    FIELDS = _FIELDS
     REVERSE = {'+': False, '-': True}
-    FIELDS = ProjectEntry._fields + tuple(filter(lambda f: not f in ProjectEntry._fields, FileEntry._fields))
     def __init__(self, s):
         self.key = None
         self.reverse = False
@@ -37,6 +42,9 @@ class BaseProject(metaclass=abc.ABCMeta):
         self._language_stats = collections.defaultdict(Stats)
         self._tot_stats = Stats()
 
+    def project_entry(self):
+        return ProjectEntry(projects=self.num_projects(), files=self._tot_stats.num_files, lines=self._tot_stats.num_lines, bytes=self._tot_stats.num_bytes)
+
     @abc.abstractmethod
     def num_projects(self):
         pass
@@ -48,7 +56,7 @@ class BaseProject(metaclass=abc.ABCMeta):
             self._language_stats[language] += project._language_stats[language]
         self._tot_stats += project._tot_stats
 
-    def report(self, print_function=print, sort_keys=None):
+    def report(self, *, print_function=print, sort_keys=None):
         if self.name:
             print("=== Project[{}]".format(self.name))
         tot_stats = Stats()
@@ -59,7 +67,7 @@ class BaseProject(metaclass=abc.ABCMeta):
         print_function(fmt_header.format('LANGUAGE', '#FILES', '#LINES', '#BYTES'))
         table = []
         for language, language_stats in self._language_stats.items():
-            table.append(ProjectEntry(
+            table.append(DirEntry(
                 language=language,
                 files=language_stats.num_files,
                 lines=language_stats.num_lines,
@@ -69,20 +77,20 @@ class BaseProject(metaclass=abc.ABCMeta):
         if sort_keys:
             for sort_key in sort_keys:
                 assert isinstance(sort_key, SortKey)
-                if not sort_key.key in ProjectEntry._fields:
+                if not sort_key.key in DirEntry._fields:
                     continue
                 table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
 
         for entry in table:
             if File.language_has_stats(entry.language):
-                fmt = fmt_data
-            else:
                 fmt = fmt_code
+            else:
+                fmt = fmt_data
             print_function(fmt.format(entry.language, entry.files, entry.lines, entry.bytes))
         print_function(fmt_code.format('TOTAL', self._tot_stats.num_files, self._tot_stats.num_lines, self._tot_stats.num_bytes))
         print_function()
 
-    def list_language_files(self, language, print_function=print, sort_keys=None):
+    def list_language_files(self, language, *, print_function=print, sort_keys=None):
         if self.name:
             print("=== Project[{}]".format(self.name))
         if not language in self._language_files:
@@ -109,12 +117,13 @@ class BaseProject(metaclass=abc.ABCMeta):
 
         for entry in table:
             if File.language_has_stats(entry.language):
-                fmt = fmt_data
-            else:
                 fmt = fmt_code
+            else:
+                fmt = fmt_data
             print_function(fmt.format(entry.language, entry.lines, entry.bytes, entry.filepath))
         print_function(fmt_code.format('TOTAL', tot_stats.num_lines, tot_stats.num_bytes, ''))
         print_function()
+
 
 class Project(BaseProject):
     EXCLUDE_DIRS = {'.git', '.svn', 'CVS'}
@@ -206,18 +215,30 @@ class MetaProject(BaseProject):
     def __getitem__(self, index):
         return self.projects[index]
 
-    def report(self, *p_args, **n_args):
+    def sort_projects(self, *, sort_keys=None):
+        pl = [(project.project_entry(), project) for project in self.projects]
+        if sort_keys:
+            for sort_key in sort_keys:
+                assert isinstance(sort_key, SortKey)
+                if not sort_key.key in ProjectEntry._fields:
+                    continue
+            pl.sort(key=lambda x: getattr(x[0], sort_key.key), reverse=sort_key.reverse)
+        self.projects = [x[1] for x in pl]
+
+    def report(self, *, print_function=print, sort_keys=None):
+        self.sort_projects(sort_keys=sort_keys)
         for project in self.projects:
-            project.report(*p_args, **n_args)
+            project.report(print_function=print_function, sort_keys=sort_keys)
 
         if len(self.projects) > 1:
-            super().report(*p_args, **n_args)
+            super().report(print_function=print_function, sort_keys=sort_keys)
             print("PROJECTS: {}".format(self.num_projects()))
 
-    def list_language_files(self, *p_args, **n_args):
+    def list_language_files(self, language, *, print_function=print, sort_keys=None):
+        self.sort_projects(sort_keys=sort_keys)
         for project in self.projects:
-            project.report(*p_args, **n_args)
+            project.list_language_files(language, print_function=print_function, sort_keys=sort_keys)
 
         if len(self.projects) > 1:
-            super().language_filesreport(*p_args, **n_args)
+            super().list_language_files(language, print_function=print_function, sort_keys=sort_keys)
             print("PROJECTS: {}".format(self.num_projects()))

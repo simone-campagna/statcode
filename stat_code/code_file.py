@@ -37,7 +37,9 @@ class File(object):
     SHEBANG = '#!'
 
     INTERPRETERS = {
-        'python3':  'python'
+        'python3*':  'python',
+        'tcl*':      'tcl',
+        'perl*':     'perl',
     }
 
     UNCLASSIFIED = '@unclassified@'
@@ -125,7 +127,12 @@ class File(object):
                     else:
                         interpreter = l[0]
                 interpreter = os.path.basename(interpreter)
-                language = cls.INTERPRETERS.get(interpreter, interpreter)
+                for pattern, interpreted_language in cls.INTERPRETERS.items():
+                    if fnmatch.fnmatch(interpreter, pattern):
+                        language = interpreted_language
+                        break
+                else:
+                    language = interpreter
                 return language
         except UnicodeDecodeError:
             pass
