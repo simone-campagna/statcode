@@ -6,17 +6,19 @@ import collections
 
 from .code_file import File, FileStats
 
-Entry = collections.namedtuple('Entry', ('language', 'files', 'lines', 'bytes'))
+ProjectEntry = collections.namedtuple('ProjectEntry', ('language', 'files', 'lines', 'bytes'))
+FileEntry = collections.namedtuple('FileEntry', ('language', 'lines', 'bytes', 'filepath'))
 
 class SortKey(object):
     REVERSE = {'+': False, '-': True}
+    FIELDS = ProjectEntry._fields + tuple(filter(lambda f: not f in ProjectEntry._fields, FileEntry._fields))
     def __init__(self, s):
         self.key = None
         self.reverse = False
-        if s in Entry._fields:
+        if s in self.FIELDS:
             self.key = s
         if s:
-            if s[0] in '+-' and s[1:] in Entry._fields:
+            if s[0] in '+-' and s[1:] in self.FIELDS:
                 self.key = s[1:]
                 self.reverse = self.REVERSE[s[0]]
         if self.key is None:
@@ -24,7 +26,7 @@ class SortKey(object):
 
     @classmethod
     def choices(cls):
-        return '|'.join("[+-]{}".format(k) for k in Entry._fields)
+        return '|'.join("[+-]{}".format(k) for k in cls.FIELDS)
 
 class Project(object):
     EXCLUDE_DIRS = {'.git', '.svn', 'CVS'}
@@ -92,7 +94,7 @@ class Project(object):
             if language != File.DATA:
                 for code_file in code_files:
                     language_stats += code_file.stats
-            table.append(Entry(
+            table.append(ProjectEntry(
                 language=language,
                 files=len(code_files),
                 lines=language_stats.num_lines,
@@ -102,6 +104,8 @@ class Project(object):
         if sort_keys:
             for sort_key in sort_keys:
                 assert isinstance(sort_key, SortKey)
+                if not sort_key.key in ProjectEntry._fields:
+                    continue
                 table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
 
         for entry in table:
@@ -113,3 +117,32 @@ class Project(object):
         print_function()
         print_function(fmt_code.format('TOTAL', tot_files, tot_stats.num_lines, tot_stats.num_bytes))
 
+    def list_language_files(self, language, print_function=print, sort_keys=None):
+        if language in self._language_files:
+            fmt_header = "{:16} {:>12s} {:>12s} {}"
+            fmt_data = "{:16}"
+            fmt_code = fmt_data + " {:12d} {:12d} {}"
+            print_function(fmt_header.format('LANGUAGE', '#LINES', '#BYTES', 'FILENAME'))
+            table = []
+            tot_stats = FileStats()
+            for code_file in self._language_files[language]:
+                stats = code_file.stats
+                tot_stats += stats
+                table.append(FileEntry(language=language, lines=stats.num_lines, bytes=stats.num_bytes, filepath=code_file.filepath))
+
+        table.sort(key=lambda x: x.language)
+        if sort_keys:
+            for sort_key in sort_keys:
+                assert isinstance(sort_key, SortKey)
+                if not sort_key.key in FileEntry._fields:
+                    continue
+                table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
+
+        for entry in table:
+            if entry.language == File.DATA:
+                fmt = fmt_data
+            else:
+                fmt = fmt_code
+            print_function(fmt.format(entry.language, entry.lines, entry.bytes, entry.filepath))
+        print_function()
+        print_function(fmt_code.format('TOTAL', tot_stats.num_lines, tot_stats.num_bytes, ''))

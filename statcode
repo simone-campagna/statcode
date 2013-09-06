@@ -29,13 +29,23 @@ Show statistics about a source code project.
         type=SortKey,
         help='sort keys [{}]'.format(SortKey.choices()))
 
+    parser.add_argument("--list-files", "-L",
+        dest='list_language_files',
+        metavar="L",
+        nargs='+',
+        default=[SortKey('filepath'), SortKey('lines')],
+        help='list files for the chosen languages')
 
     args = parser.parse_args()
 
     for project_dir in args.project_dirs:
         project = Project(project_dir, language_hints=args.language)
-        project.report(sort_keys=args.sort_keys)
         
+        if args.list_language_files:
+            for language in args.list_language_files:
+                project.list_language_files(language, sort_keys=args.sort_keys)
+        else:
+            project.report(sort_keys=args.sort_keys)
 
 if __name__ == "__main__":
     main()
