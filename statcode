@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+
+import argparse
+
+from stat_code.project import *
+def main():
+    parser = argparse.ArgumentParser(
+        description="""\
+Show statistics about a source code project.
+"""
+    )
+    parser.add_argument("project_dirs",
+        nargs='+',
+        help='project directories')
+
+    parser.add_argument("--language", "-l",
+        metavar="L",
+        nargs='+',
+        help='project language(s)')
+
+
+    args = parser.parse_args()
+
+    for project_dir in args.project_dirs:
+        project = Project(project_dir, language_hints=args.language)
+        project.report()
+        
+
+if __name__ == "__main__":
+    main()
