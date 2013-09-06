@@ -4,7 +4,7 @@ import os
 import fnmatch
 import collections
 
-from .stats import Stats
+from .stats import FileStats
 
 def _invert_dict(d):
     inv_d = collections.defaultdict(set)
@@ -13,7 +13,7 @@ def _invert_dict(d):
             inv_d[extension].add(language)
     return inv_d
 
-class File(object):
+class ProjectFile(object):
     LANGUAGE_EXTENSIONS = {
         'C': ('.h', '.hpp', '.c', '.c99'),
         'C++': ('.h', '.hpp', '.C', '.cxx', '.cpp', '.c++', '.C++'),
@@ -50,7 +50,7 @@ class File(object):
         self.project = project
         self.filepath = filepath
         self.language = language
-        self.stats = Stats(num_files=1)
+        self.stats = FileStats()
         self.classify()
 
     def has_stats(self):
@@ -85,7 +85,7 @@ class File(object):
     def stats_filehandle(self, filehandle):
         filehandle.seek(0)
         for line in filehandle:
-            self.stats += Stats(0, 1, len(line))
+            self.stats += FileStats(1, len(line))
         
 
     def post_classify(self):

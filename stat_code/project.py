@@ -5,8 +5,8 @@ import abc
 import fnmatch
 import collections
 
-from .stats import Stats
-from .code_file import File
+from .stats import FileStats, DirStats
+from .project_file import ProjectFile
 
 DirEntry = collections.namedtuple('DirEntry', ('language', 'files', 'lines', 'bytes'))
 FileEntry = collections.namedtuple('FileEntry', ('language', 'lines', 'bytes', 'filepath'))
@@ -38,12 +38,12 @@ class SortKey(object):
 class BaseProject(metaclass=abc.ABCMeta):
     def __init__(self, name):
         self.name = name
-        self._language_files = collections.defaultdict(list)
-        self._language_stats = collections.defaultdict(Stats)
-        self._tot_stats = Stats()
+        self.language_project_files = collections.defaultdict(list)
+        self.language_dir_stats = collections.defaultdict(DirStats)
+        self.tot_stats = DirStats()
 
     def project_entry(self):
-        return ProjectEntry(projects=self.num_projects(), files=self._tot_stats.num_files, lines=self._tot_stats.num_lines, bytes=self._tot_stats.num_bytes)
+        return ProjectEntry(projects=self.num_projects(), files=self.tot_stats.files, lines=self.tot_stats.lines, bytes=self.tot_stats.bytes)
 
     @abc.abstractmethod
     def num_projects(self):
@@ -51,27 +51,27 @@ class BaseProject(metaclass=abc.ABCMeta):
 
     def merge_project(self, project):
         assert isinstance(project, BaseProject)
-        for language, code_files in project._language_files.items():
-            self._language_files[language].extend(code_files)
-            self._language_stats[language] += project._language_stats[language]
-        self._tot_stats += project._tot_stats
+        for language, project_files in project.language_project_files.items():
+            self.language_project_files[language].extend(project_files)
+            self.language_dir_stats[language] += project.language_dir_stats[language]
+        self.tot_stats += project.tot_stats
 
     def report(self, *, print_function=print, sort_keys=None):
         if self.name:
             print("=== Project[{}]".format(self.name))
-        tot_stats = Stats()
-        languages = sorted(self._language_files.keys(), key=lambda x: x.lower())
+        tot_stats = DirStats()
+        languages = sorted(self.language_project_files.keys(), key=lambda x: x.lower())
         fmt_header = "{:16} {:>12s} {:>12s} {:>12s}"
         fmt_data = "{:16} {:12d}"
         fmt_code = fmt_data + " {:12d} {:12d}"
         print_function(fmt_header.format('LANGUAGE', '#FILES', '#LINES', '#BYTES'))
         table = []
-        for language, language_stats in self._language_stats.items():
+        for language, language_stats in self.language_dir_stats.items():
             table.append(DirEntry(
                 language=language,
-                files=language_stats.num_files,
-                lines=language_stats.num_lines,
-                bytes=language_stats.num_bytes))
+                files=language_stats.files,
+                lines=language_stats.lines,
+                bytes=language_stats.bytes))
 
         table.sort(key=lambda x: x.language)
         if sort_keys:
@@ -82,18 +82,18 @@ class BaseProject(metaclass=abc.ABCMeta):
                 table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
 
         for entry in table:
-            if File.language_has_stats(entry.language):
+            if ProjectFile.language_has_stats(entry.language):
                 fmt = fmt_code
             else:
                 fmt = fmt_data
             print_function(fmt.format(entry.language, entry.files, entry.lines, entry.bytes))
-        print_function(fmt_code.format('TOTAL', self._tot_stats.num_files, self._tot_stats.num_lines, self._tot_stats.num_bytes))
+        print_function(fmt_code.format('TOTAL', self.tot_stats.files, self.tot_stats.lines, self.tot_stats.bytes))
         print_function()
 
     def list_language_files(self, language, *, print_function=print, sort_keys=None):
         if self.name:
             print("=== Project[{}]".format(self.name))
-        if not language in self._language_files:
+        if not language in self.language_project_files:
             return
 
         fmt_header = "{:16} {:>12s} {:>12s} {}"
@@ -101,11 +101,11 @@ class BaseProject(metaclass=abc.ABCMeta):
         fmt_code = fmt_data + " {:12d} {:12d} {}"
         print_function(fmt_header.format('LANGUAGE', '#LINES', '#BYTES', 'FILENAME'))
         table = []
-        tot_stats = Stats()
-        for code_file in self._language_files[language]:
-            stats = code_file.stats
+        tot_stats = DirStats()
+        for project_file in self.language_project_files[language]:
+            stats = project_file.stats
             tot_stats += stats
-            table.append(FileEntry(language=language, lines=stats.num_lines, bytes=stats.num_bytes, filepath=code_file.filepath))
+            table.append(FileEntry(language=language, lines=stats.lines, bytes=stats.bytes, filepath=project_file.filepath))
 
         table.sort(key=lambda x: x.language)
         if sort_keys:
@@ -116,12 +116,12 @@ class BaseProject(metaclass=abc.ABCMeta):
                 table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
 
         for entry in table:
-            if File.language_has_stats(entry.language):
+            if ProjectFile.language_has_stats(entry.language):
                 fmt = fmt_code
             else:
                 fmt = fmt_data
             print_function(fmt.format(entry.language, entry.lines, entry.bytes, entry.filepath))
-        print_function(fmt_code.format('TOTAL', tot_stats.num_lines, tot_stats.num_bytes, ''))
+        print_function(fmt_code.format('TOTAL', tot_stats.lines, tot_stats.bytes, ''))
         print_function()
 
 
@@ -166,24 +166,24 @@ class Project(BaseProject):
                 filenames = list(filter(lambda filename: not filename in excluded_filenames, filenames))
             for filename in filenames:
                 filepath = os.path.join(dirpath, filename)
-                code_file = File(self, filepath)
-                if code_file.language:
-                    self._language_files[code_file.language].append(code_file)
+                project_file = ProjectFile(self, filepath)
+                if project_file.language:
+                    self.language_project_files[project_file.language].append(project_file)
                 else:
-                    unclassified_files.append(code_file)
-        for code_file in unclassified_files:
-            code_file.post_classify()
-            self._language_files[code_file.language].append(code_file)
-        for language, code_files in self._language_files.items():
-            language_stats = Stats()
-            for code_file in code_files:
-                language_stats += code_file.stats
-            self._language_stats[language] = language_stats
-            if File.language_has_stats(language):
-                self._tot_stats += language_stats
+                    unclassified_files.append(project_file)
+        for project_file in unclassified_files:
+            project_file.post_classify()
+            self.language_project_files[project_file.language].append(project_file)
+        for language, project_files in self.language_project_files.items():
+            language_stats = DirStats()
+            for project_file in project_files:
+                language_stats += project_file.stats
+            self.language_dir_stats[language] = language_stats
+            if ProjectFile.language_has_stats(language):
+                self.tot_stats += language_stats
 
     def most_common_languages(self):
-        for language, files in sorted(((language, files) for language, files in self._language_files.items()), key=lambda x: -len(x[1])):
+        for language, files in sorted(((language, files) for language, files in self.language_project_files.items()), key=lambda x: -len(x[1])):
             yield language
         
     def language_hints(self):
