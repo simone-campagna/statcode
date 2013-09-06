@@ -4,17 +4,7 @@ import os
 import fnmatch
 import collections
 
-class FileStats(object):
-    def __init__(self, num_lines=0, num_bytes=0):
-        self.num_lines = num_lines
-        self.num_bytes = num_bytes
-
-    def __add__(self, stats):
-        return self.__class__(self.num_lines + stats.num_lines, self.num_bytes + stats.num_bytes)
-
-    def __iadd(self, stats):
-        self.num_lines += stats.num_lines
-        self.num_bytes += stats.num_bytes
+from .stats import Stats
 
 def _invert_dict(d):
     inv_d = collections.defaultdict(set)
@@ -52,17 +42,30 @@ class File(object):
 
     UNCLASSIFIED = '@unclassified@'
     DATA = '@data@'
+    BROKEN_LINK = '@broken-link@'
 
     def __init__(self, project, filepath, language=None):
         self.project = project
         self.filepath = filepath
         self.language = language
-        self.stats = FileStats()
+        self.stats = Stats(num_files=1)
         self.classify()
 
+    def has_stats(self):
+        return self.language_has_stats(self.language)
+
+    @classmethod
+    def language_has_stats(cls, language):
+        return language not in {cls.DATA, cls.BROKEN_LINK}
+
     def classify(self):
+        if not os.path.exists(os.path.realpath(self.filepath)):
+            self.language = self.BROKEN_LINK
+            return
+
         dirname, filename = os.path.split(self.filepath)
         fileroot, fileext = os.path.splitext(filename)
+
         try:
             with open(self.filepath, 'r') as filehandle:
                 self._languages = None
@@ -80,7 +83,8 @@ class File(object):
     def stats_filehandle(self, filehandle):
         filehandle.seek(0)
         for line in filehandle:
-            self.stats += FileStats(1, len(line))
+            self.stats += Stats(0, 1, len(line))
+        
 
     def post_classify(self):
         if self.language is None:
