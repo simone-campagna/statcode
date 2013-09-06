@@ -6,6 +6,26 @@ import collections
 
 from .code_file import File, FileStats
 
+Entry = collections.namedtuple('Entry', ('language', 'files', 'lines', 'bytes'))
+
+class SortKey(object):
+    REVERSE = {'+': False, '-': True}
+    def __init__(self, s):
+        self.key = None
+        self.reverse = False
+        if s in Entry._fields:
+            self.key = s
+        if s:
+            if s[0] in '+-' and s[1:] in Entry._fields:
+                self.key = s[1:]
+                self.reverse = self.REVERSE[s[0]]
+        if self.key is None:
+            raise ValueError("invalid sort_key {!r}; valid values are {}".format(s, self.choices()))
+
+    @classmethod
+    def choices(cls):
+        return '|'.join("[+-]{}".format(k) for k in Entry._fields)
+
 class Project(object):
     EXCLUDE_DIRS = {'.git', '.svn', 'CVS'}
     EXCLUDE_FILES = {'.*.swp', '*.pyc', '.gitignore', '.svnignore'}
@@ -58,28 +78,38 @@ class Project(object):
     def language_hints(self):
         return iter(self._language_hints)
 
-    def report(self, print_function=print):
+    def report(self, print_function=print, sort_keys=None):
         tot_files = 0
         tot_stats = FileStats()
-        languages = sorted(self._language_files.keys())
+        languages = sorted(self._language_files.keys(), key=lambda x: x.lower())
         fmt_header = "{:16} {:>12s} {:>12s} {:>12s}"
         fmt_data = "{:16} {:12d}"
         fmt_code = fmt_data + " {:12d} {:12d}"
         print_function(fmt_header.format('LANGUAGE', '#FILES', '#LINES', '#BYTES'))
-        for language in languages:
-            code_files = self._language_files[language]
-            #if language == File.UNCLASSIFIED:
-            #    for code_file in code_files:
-            #        print_function("   ", language, code_file.filepath)
-            if language == File.DATA:
-                print_function(fmt_data.format(language, len(code_files)))
-                continue
+        table = []
+        for language, code_files in self._language_files.items():
             language_stats = FileStats()
-            for code_file in code_files:
-                language_stats += code_file.stats
-            tot_files += len(code_files)
-            tot_stats += language_stats
-            print_function(fmt_code.format(language, len(code_files), language_stats.num_lines, language_stats.num_bytes))
+            if language != File.DATA:
+                for code_file in code_files:
+                    language_stats += code_file.stats
+            table.append(Entry(
+                language=language,
+                files=len(code_files),
+                lines=language_stats.num_lines,
+                bytes=language_stats.num_bytes))
+
+        table.sort(key=lambda x: x.language)
+        if sort_keys:
+            for sort_key in sort_keys:
+                assert isinstance(sort_key, SortKey)
+                table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
+
+        for entry in table:
+            if entry.language == File.DATA:
+                fmt = fmt_data
+            else:
+                fmt = fmt_code
+            print_function(fmt.format(entry.language, entry.files, entry.lines, entry.bytes))
         print_function()
         print_function(fmt_code.format('TOTAL', tot_files, tot_stats.num_lines, tot_stats.num_bytes))
 

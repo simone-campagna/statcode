@@ -9,6 +9,9 @@ def main():
 Show statistics about a source code project.
 """
     )
+
+    sort_keys = ['language', 'files', 'lines', 'bytes']
+
     parser.add_argument("project_dirs",
         nargs='+',
         help='project directories')
@@ -18,12 +21,20 @@ Show statistics about a source code project.
         nargs='+',
         help='project language(s)')
 
+    parser.add_argument("--sort-key", "-k",
+        dest='sort_keys',
+        metavar="K",
+        nargs="+",
+        default=[SortKey('language'), SortKey('files'), SortKey('lines')],
+        type=SortKey,
+        help='sort keys [{}]'.format(SortKey.choices()))
+
 
     args = parser.parse_args()
 
     for project_dir in args.project_dirs:
         project = Project(project_dir, language_hints=args.language)
-        project.report()
+        project.report(sort_keys=args.sort_keys)
         
 
 if __name__ == "__main__":

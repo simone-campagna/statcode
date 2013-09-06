@@ -26,7 +26,7 @@ def _invert_dict(d):
 class File(object):
     LANGUAGE_EXTENSIONS = {
         'C': ('.h', '.hpp', '.c', '.c99'),
-        'C++': ('.h', '.hpp', '.c', '.C', '.cxx', '.cpp', '.c++', '.C++'),
+        'C++': ('.h', '.hpp', '.C', '.cxx', '.cpp', '.c++', '.C++'),
         'python': ('.py', ),
         'shell': ('.sh', '.bash', '.csh', '.tcsh'),
         'm4': ('.m4', ),
@@ -50,8 +50,8 @@ class File(object):
         'python3':  'python'
     }
 
-    UNCLASSIFIED = '__unclassified__'
-    DATA = '__data__'
+    UNCLASSIFIED = '@unclassified@'
+    DATA = '@data@'
 
     def __init__(self, project, filepath, language=None):
         self.project = project
