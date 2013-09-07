@@ -46,8 +46,8 @@ class ProjectFile(object):
     DATA = '@data@'
     BROKEN_LINK = '@broken-link@'
 
-    def __init__(self, project, filepath, language=None):
-        self.project = project
+    def __init__(self, filepath, project_dir, language=None):
+        self.project_dir = project_dir
         self.filepath = filepath
         self.language = language
         self.stats = FileStats()
@@ -92,13 +92,13 @@ class ProjectFile(object):
         if self.language is None:
             self.language = None
             if self._languages:
-                for language in self.project.most_common_languages():
+                for language in self.project_dir.most_common_languages():
                     if language in self._languages:
                         self.language = language
                         break
 
                 if self.language is None:
-                    for language in self.project.language_hints():
+                    for language in self.project_dir.language_hints():
                         if language in self._languages:
                             self.language = language
                             break

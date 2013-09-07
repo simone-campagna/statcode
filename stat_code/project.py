@@ -7,6 +7,7 @@ import collections
 
 from .stats import FileStats, DirStats
 from .project_file import ProjectFile
+from .project_dir import ProjectDir
 
 DirEntry = collections.namedtuple('DirEntry', ('language', 'files', 'lines', 'bytes'))
 FileEntry = collections.namedtuple('FileEntry', ('language', 'lines', 'bytes', 'filepath'))
@@ -148,6 +149,10 @@ class Project(BaseProject):
         return 1
 
     def classify(self):
+        project_dir = ProjectDir(self.project_dir, None, self)
+        project_dir.make_tree_stats()
+        print(project_dir.dir_stats)
+        print(project_dir.tree_stats)
         unclassified_files = []
         for dirpath, dirnames, filenames in os.walk(self.project_dir, topdown=True):
             excluded_dirnames = set()
@@ -166,7 +171,7 @@ class Project(BaseProject):
                 filenames = list(filter(lambda filename: not filename in excluded_filenames, filenames))
             for filename in filenames:
                 filepath = os.path.join(dirpath, filename)
-                project_file = ProjectFile(self, filepath)
+                project_file = ProjectFile(filepath, self)
                 if project_file.language:
                     self.language_project_files[project_file.language].append(project_file)
                 else:
