@@ -10,9 +10,10 @@ class FileStats(object):
     def __add__(self, stats):
         return self.__class__(self.lines + stats.lines, self.bytes + stats.bytes)
 
-    def __iadd(self, stats):
+    def __iadd__(self, stats):
         self.lines += stats.lines
         self.bytes += stats.bytes
+        return self
 
     def clear(self):
         self.lines = 0
@@ -30,10 +31,11 @@ class DirStats(FileStats):
     def __add__(self, stats):
         return self.__class__(self.files + stats.files, self.lines + stats.lines, self.bytes + stats.bytes)
 
-    def __iadd(self, stats):
+    def __iadd__(self, stats):
         self.files += stats.files
         self.lines += stats.lines
         self.bytes += stats.bytes
+        return self
 
     def clear(self):
         self.files = 0
@@ -51,11 +53,12 @@ class TreeStats(DirStats):
     def __add__(self, stats):
         return self.__class__(self.dirs + stats.dirs, self.files + stats.files, self.lines + stats.lines, self.bytes + stats.bytes)
 
-    def __iadd(self, stats):
+    def __iadd__(self, stats):
         self.dirs  += stats.dirs
         self.files += stats.files
         self.lines += stats.lines
         self.bytes += stats.bytes
+        return self
 
     def clear(self):
         self.dirs = 0

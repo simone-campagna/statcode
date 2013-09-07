@@ -42,9 +42,9 @@ class ProjectFile(object):
         'perl*':     'perl',
     }
 
-    UNCLASSIFIED = '@unclassified@'
-    DATA = '@data@'
-    BROKEN_LINK = '@broken-link@'
+    UNCLASSIFIED = '{unclassified}'
+    DATA = '{data}'
+    BROKEN_LINK = '{broken-link}'
 
     def __init__(self, filepath, project_dir, language=None):
         self.project_dir = project_dir

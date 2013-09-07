@@ -5,9 +5,10 @@ import abc
 import fnmatch
 import collections
 
-from .stats import FileStats, DirStats
+from .stats import FileStats, DirStats, TreeStats
 from .project_file import ProjectFile
 from .project_dir import ProjectDir
+from .project_tree import ProjectTree
 
 DirEntry = collections.namedtuple('DirEntry', ('language', 'files', 'lines', 'bytes'))
 FileEntry = collections.namedtuple('FileEntry', ('language', 'lines', 'bytes', 'filepath'))
@@ -127,7 +128,7 @@ class BaseProject(metaclass=abc.ABCMeta):
 
 
 class Project(BaseProject):
-    EXCLUDE_DIRS = {'.git', '.svn', 'CVS'}
+    EXCLUDE_DIRS = {'.git', '.svn', 'CVS', '__pycache__'}
     EXCLUDE_FILES = {'.*.swp', '*.pyc', '.gitignore', '.svnignore'}
     def __init__(self, project_dir, language_hints=None, exclude_dirs=None, exclude_files=None):
         super().__init__(project_dir)
@@ -149,10 +150,9 @@ class Project(BaseProject):
         return 1
 
     def classify(self):
-        project_dir = ProjectDir(self.project_dir, None, self)
-        project_dir.make_tree_stats()
-        print(project_dir.dir_stats)
-        print(project_dir.tree_stats)
+#        project_tree = ProjectTree(self.project_dir, None, self)
+#        print(project_tree.dir_stats)
+#        print(project_tree.tree_stats)
         unclassified_files = []
         for dirpath, dirnames, filenames in os.walk(self.project_dir, topdown=True):
             excluded_dirnames = set()
