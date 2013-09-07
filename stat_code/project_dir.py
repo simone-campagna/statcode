@@ -21,7 +21,8 @@ class ProjectDir(object):
         self.classify()
 
     def most_common_languages(self):
-        l = sorted(((language, len(project_files)) for language, project_files in self.dir_language_project_files.items),
+        languages = set(self.dir_language_project_files.keys()).difference(ProjectFile.NO_LANGUAGES)
+        l = sorted(((language, len(self.dir_language_project_files[language])) for language in languages),
                     key=lambda x: -x[-1])
         for language, num_files in l:
             yield language
@@ -51,7 +52,8 @@ class ProjectDir(object):
         return False
 
     def classify(self):
-        if not os.path.exists(os.path.realpath(self.dirpath)):
+        real_dirpath = os.path.realpath(self.dirpath)
+        if not os.path.isdir(real_dirpath):
             return
 
         exclude_dirs = self.project.exclude_dirs

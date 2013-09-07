@@ -45,6 +45,7 @@ class ProjectFile(object):
     UNCLASSIFIED = '{unclassified}'
     DATA = '{data}'
     BROKEN_LINK = '{broken-link}'
+    NO_LANGUAGES = {UNCLASSIFIED, DATA, BROKEN_LINK}
 
     def __init__(self, filepath, project_dir, language=None):
         self.project_dir = project_dir
@@ -81,11 +82,16 @@ class ProjectFile(object):
         except UnicodeDecodeError:
             if self.language is None: 
                 self.language = self.DATA
+                self.stats += FileStats(0, os.stat(self.filepath).st_size)
     
     def stats_filehandle(self, filehandle):
         filehandle.seek(0)
+        num_lines = 0
+        num_bytes = 0
         for line in filehandle:
-            self.stats += FileStats(1, len(line))
+            num_lines += 1
+            num_bytes += len(line)
+        self.stats += FileStats(num_lines, num_bytes)
         
 
     def post_classify(self):
@@ -93,6 +99,7 @@ class ProjectFile(object):
             self.language = None
             if self._languages:
                 for language in self.project_dir.most_common_languages():
+                    assert not language in self.NO_LANGUAGES
                     if language in self._languages:
                         self.language = language
                         break

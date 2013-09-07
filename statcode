@@ -35,7 +35,32 @@ Show statistics about a source code project.
         nargs='+',
         help='list files for the chosen languages')
 
+    select_discard_group = parser.add_mutually_exclusive_group()
+    select_discard_group.add_argument("--select-languages", "-S",
+        dest='select_languages',
+        metavar="L",
+        nargs='+',
+        help='select languages matching given pattern')
+
+    select_discard_group.add_argument("--discard-languages", "-D",
+        dest='discard_languages',
+        metavar="L",
+        nargs='+',
+        help='discard languages matching given pattern')
+
     args = parser.parse_args()
+
+    select_languages = getattr(args, 'select_languages', None)
+    discard_languages = getattr(args, 'discard_languages', None)
+    if select_languages is not None:
+        patterns = select_languages
+        pattern_type='+'
+    elif discard_languages is not None:
+        patterns = discard_languages
+        pattern_type='-'
+    else:
+        patterns = ProjectFile.NO_LANGUAGES
+        pattern_type='-'
 
     meta_project = MetaProject()
     for project_dir in args.project_dirs:
@@ -46,7 +71,7 @@ Show statistics about a source code project.
         for language in args.list_language_files:
             meta_project.list_language_files(language, sort_keys=args.sort_keys)
     else:
-        meta_project.report(sort_keys=args.sort_keys)
+        meta_project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type)
 
 if __name__ == "__main__":
     main()

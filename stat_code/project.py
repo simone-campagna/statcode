@@ -8,7 +8,7 @@ import collections
 from .stats import FileStats, DirStats, TreeStats
 from .project_file import ProjectFile
 from .project_dir import ProjectDir
-from .project_tree import ProjectTree
+from .project_tree import ProjectTree, BaseTree
 
 DirEntry = collections.namedtuple('DirEntry', ('language', 'files', 'lines', 'bytes'))
 FileEntry = collections.namedtuple('FileEntry', ('language', 'lines', 'bytes', 'filepath'))
@@ -37,15 +37,16 @@ class SortKey(object):
     def choices(cls):
         return '|'.join("[+-]{}".format(k) for k in cls.FIELDS)
 
-class BaseProject(metaclass=abc.ABCMeta):
+class BaseProject(BaseTree, metaclass=abc.ABCMeta):
     def __init__(self, name):
         self.name = name
-        self.language_project_files = collections.defaultdict(list)
-        self.language_dir_stats = collections.defaultdict(DirStats)
-        self.tot_stats = DirStats()
+        #self.language_project_files = collections.defaultdict(list)
+        #self.language_dir_stats = collections.defaultdict(DirStats)
+        #self.tot_stats = DirStats()
+        super().__init__()
 
     def project_entry(self):
-        return ProjectEntry(projects=self.num_projects(), files=self.tot_stats.files, lines=self.tot_stats.lines, bytes=self.tot_stats.bytes)
+        return ProjectEntry(projects=self.num_projects(), files=self.tree_stats.files, lines=self.tree_stats.lines, bytes=self.tree_stats.bytes)
 
     @abc.abstractmethod
     def num_projects(self):
@@ -53,27 +54,40 @@ class BaseProject(metaclass=abc.ABCMeta):
 
     def merge_project(self, project):
         assert isinstance(project, BaseProject)
-        for language, project_files in project.language_project_files.items():
-            self.language_project_files[language].extend(project_files)
-            self.language_dir_stats[language] += project.language_dir_stats[language]
-        self.tot_stats += project.tot_stats
+        super().merge_tree(project)
 
-    def report(self, *, print_function=print, sort_keys=None):
+
+    def report(self, *, print_function=print, sort_keys=None, patterns=None, pattern_type='+'):
         if self.name:
             print("=== Project[{}]".format(self.name))
-        tot_stats = DirStats()
-        languages = sorted(self.language_project_files.keys(), key=lambda x: x.lower())
-        fmt_header = "{:16} {:>12s} {:>12s} {:>12s}"
-        fmt_data = "{:16} {:12d}"
-        fmt_code = fmt_data + " {:12d} {:12d}"
-        print_function(fmt_header.format('LANGUAGE', '#FILES', '#LINES', '#BYTES'))
+        if patterns is None:
+            patterns = []
+        if pattern_type is None:
+            pattern_type = '+'
+        languages = sorted(self.tree_language_project_files.keys(), key=lambda x: x.lower())
+        fmt_header = "{language:16} {files:>12s} {lines:>12s} {bytes:>12s}"
+        fmt_data = "{language:16} {files:12d} {lines:12d} {bytes:12d}"
+        fmt_code = "{language:16} {files:12d} {lines:12d} {bytes:12d}"
+        print_function(fmt_header.format(language='LANGUAGE', files='#FILES', lines='#LINES', bytes='#BYTES', null=''))
         table = []
-        for language, language_stats in self.language_dir_stats.items():
+        tree_stats = TreeStats()
+        languages = set(self.tree_language_stats.keys())
+        if pattern_type == '-':
+            for pattern in patterns:
+                languages.difference_update(fnmatch.filter(languages, pattern))
+        else:
+            selected_languages = set()
+            for pattern in patterns:
+                selected_languages.update(fnmatch.filter(languages, pattern))
+            languages = selected_languages
+        for language in languages:
+            language_stats = self.tree_language_stats[language]
             table.append(DirEntry(
                 language=language,
                 files=language_stats.files,
                 lines=language_stats.lines,
                 bytes=language_stats.bytes))
+            tree_stats += language_stats
 
         table.sort(key=lambda x: x.language)
         if sort_keys:
@@ -88,27 +102,35 @@ class BaseProject(metaclass=abc.ABCMeta):
                 fmt = fmt_code
             else:
                 fmt = fmt_data
-            print_function(fmt.format(entry.language, entry.files, entry.lines, entry.bytes))
-        print_function(fmt_code.format('TOTAL', self.tot_stats.files, self.tot_stats.lines, self.tot_stats.bytes))
+            print_function(fmt.format(language=entry.language, files=entry.files, lines=entry.lines, bytes=entry.bytes, null=''))
+        print_function(fmt_code.format(language='TOTAL', files=tree_stats.files, lines=tree_stats.lines, bytes=tree_stats.bytes, null=''))
         print_function()
 
-    def list_language_files(self, language, *, print_function=print, sort_keys=None):
+    def list_language_files(self, language_pattern, *, print_function=print, sort_keys=None):
+        languages = []
+        for language in self.tree_language_project_files:
+            if fnmatch.fnmatch(language, language_pattern):
+                languages.append(language)
+        self.list_languages_files(languages, print_function=print_function, sort_keys=sort_keys)
+
+    def list_languages_files(self, languages, *, print_function=print, sort_keys=None):
         if self.name:
             print("=== Project[{}]".format(self.name))
-        if not language in self.language_project_files:
-            return
 
-        fmt_header = "{:16} {:>12s} {:>12s} {}"
-        fmt_data = "{:16}"
-        fmt_code = fmt_data + " {:12d} {:12d} {}"
-        print_function(fmt_header.format('LANGUAGE', '#LINES', '#BYTES', 'FILENAME'))
+        fmt_header = "{language:16s} {lines:>12s} {bytes:>12s} {file}"
+        fmt_data = "{language:16s} {lines:12d} {bytes:12d} {file}"
+        fmt_code = "{language:16s} {lines:12d} {bytes:12d} {file}"
+        print_function(fmt_header.format(language='LANGUAGE', lines='#LINES', bytes='#BYTES', file='FILENAME', null=''))
         table = []
-        tot_stats = DirStats()
-        for project_file in self.language_project_files[language]:
-            stats = project_file.stats
-            tot_stats += stats
-            table.append(FileEntry(language=language, lines=stats.lines, bytes=stats.bytes, filepath=project_file.filepath))
-
+        tree_stats = TreeStats()
+        for language in languages:
+            if not language in self.tree_language_project_files:
+                continue
+            for project_file in self.tree_language_project_files[language]:
+                stats = project_file.stats
+                tree_stats += stats
+                table.append(FileEntry(language=language, lines=stats.lines, bytes=stats.bytes, filepath=project_file.filepath))
+    
         table.sort(key=lambda x: x.language)
         if sort_keys:
             for sort_key in sort_keys:
@@ -122,8 +144,8 @@ class BaseProject(metaclass=abc.ABCMeta):
                 fmt = fmt_code
             else:
                 fmt = fmt_data
-            print_function(fmt.format(entry.language, entry.lines, entry.bytes, entry.filepath))
-        print_function(fmt_code.format('TOTAL', tot_stats.lines, tot_stats.bytes, ''))
+            print_function(fmt.format(language=entry.language, lines=entry.lines, bytes=entry.bytes, file=entry.filepath, null=''))
+        print_function(fmt_code.format(language='TOTAL', lines=tree_stats.lines, bytes=tree_stats.bytes, file='', null=''))
         print_function()
 
 
@@ -150,46 +172,12 @@ class Project(BaseProject):
         return 1
 
     def classify(self):
-#        project_tree = ProjectTree(self.project_dir, None, self)
-#        print(project_tree.dir_stats)
-#        print(project_tree.tree_stats)
-        unclassified_files = []
-        for dirpath, dirnames, filenames in os.walk(self.project_dir, topdown=True):
-            excluded_dirnames = set()
-            for dir_pattern in self.exclude_dirs:
-                excluded_dirnames.update(fnmatch.filter(dirnames, dir_pattern))
-            if excluded_dirnames:
-                #print("excluded_dirnames=", excluded_dirnames)
-                filtered_dirnames = list(filter(lambda dirname: not dirname in excluded_dirnames, dirnames))
-                del dirnames[:]
-                dirnames.extend(filtered_dirnames)
-            excluded_filenames = set()
-            for file_pattern in self.exclude_files:
-                excluded_filenames.update(fnmatch.filter(filenames, file_pattern))
-            if excluded_filenames:
-                #print("excluded_filenames=", excluded_filenames)
-                filenames = list(filter(lambda filename: not filename in excluded_filenames, filenames))
-            for filename in filenames:
-                filepath = os.path.join(dirpath, filename)
-                project_file = ProjectFile(filepath, self)
-                if project_file.language:
-                    self.language_project_files[project_file.language].append(project_file)
-                else:
-                    unclassified_files.append(project_file)
-        for project_file in unclassified_files:
-            project_file.post_classify()
-            self.language_project_files[project_file.language].append(project_file)
-        for language, project_files in self.language_project_files.items():
-            language_stats = DirStats()
-            for project_file in project_files:
-                language_stats += project_file.stats
-            self.language_dir_stats[language] = language_stats
-            if ProjectFile.language_has_stats(language):
-                self.tot_stats += language_stats
+        self.project_tree = ProjectTree(self.project_dir, None, self)
+        self.merge_tree(self.project_tree)
 
-    def most_common_languages(self):
-        for language, files in sorted(((language, files) for language, files in self.language_project_files.items()), key=lambda x: -len(x[1])):
-            yield language
+#    def most_common_languages(self):
+#        for language, files in sorted(((language, files) for language, files in self.tree_language_project_files.items()), key=lambda x: -len(x[1])):
+#            yield language
         
     def language_hints(self):
         return iter(self._language_hints)
@@ -230,20 +218,20 @@ class MetaProject(BaseProject):
             pl.sort(key=lambda x: getattr(x[0], sort_key.key), reverse=sort_key.reverse)
         self.projects = [x[1] for x in pl]
 
-    def report(self, *, print_function=print, sort_keys=None):
+    def report(self, *, print_function=print, sort_keys=None, patterns=None, pattern_type=None):
         self.sort_projects(sort_keys=sort_keys)
         for project in self.projects:
-            project.report(print_function=print_function, sort_keys=sort_keys)
+            project.report(print_function=print_function, sort_keys=sort_keys, patterns=patterns, pattern_type=pattern_type)
 
         if len(self.projects) > 1:
-            super().report(print_function=print_function, sort_keys=sort_keys)
+            super().report(print_function=print_function, sort_keys=sort_keys, patterns=patterns, pattern_type=pattern_type)
             print("PROJECTS: {}".format(self.num_projects()))
 
-    def list_language_files(self, language, *, print_function=print, sort_keys=None):
+    def _list_language_files(self, language, *, print_function=print, sort_keys=None):
         self.sort_projects(sort_keys=sort_keys)
         for project in self.projects:
-            project.list_language_files(language, print_function=print_function, sort_keys=sort_keys)
+            project._list_language_files(language, print_function=print_function, sort_keys=sort_keys)
 
         if len(self.projects) > 1:
-            super().list_language_files(language, print_function=print_function, sort_keys=sort_keys)
+            super()._list_language_files(language, print_function=print_function, sort_keys=sort_keys)
             print("PROJECTS: {}".format(self.num_projects()))
