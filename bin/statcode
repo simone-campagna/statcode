@@ -1,10 +1,29 @@
 #!/usr/bin/env python3
+#
+# Copyright 2013 Simone Campagna
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
+__author__ = 'Simone Campagna'
 
+import os
 import argparse
 
-from stat_code.project import *
-from stat_code.language import LanguageClassifier
+from statcode.project import *
+from statcode.language import LanguageClassifier
+
+STATCODE_HOME_DIR = "@STATCODE_HOME_DIR@"
 
 def main():
     parser = argparse.ArgumentParser(
@@ -13,6 +32,13 @@ Show statistics about a source code project.
 """
     )
 
+    config_file = os.path.join(STATCODE_HOME_DIR, 'etc', 'statcode', 'statcode.ini')
+    if not os.path.exists(config_file):
+        config_file = None
+        config_required = True
+    else:
+        config_required = False
+
     sort_keys = ['language', 'files', 'lines', 'bytes']
 
     parser.add_argument("project_dirs",
@@ -20,7 +46,8 @@ Show statistics about a source code project.
         help='project directories')
 
     parser.add_argument("--config", "-c",
-        required=True,
+        required=config_required,
+        default=config_file,
         help="config file")
 
     parser.add_argument("--language", "-l",
@@ -75,7 +102,7 @@ Show statistics about a source code project.
 
     meta_project = MetaProject()
     for project_dir in args.project_dirs:
-        #project_dir = os.path.normpath(os.path.abspath(project_dir))
+        project_dir = os.path.normpath(os.path.abspath(project_dir))
         project = Project(config_file=args.config, project_dir=project_dir, language_hints=args.language)
         meta_project.add_project(project)
 
