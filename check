@@ -1,0 +1,32 @@
+#!/bin/ksh
+
+if [[ ${#@} -eq 0 ]] ; then
+    FILE=./tmp.$$.$RANDOM
+    remove=true
+    cat > $FILE
+else
+    FILE="$1"
+    remove=false
+fi
+
+function check {
+    typeset -i _index=$1
+    typeset    _label=$2
+    typeset    _tot=$(cat $FILE | grep -e ^TOTAL | awk "BEGIN{s=0}{s+=\$${_index}}END{print s}")
+    typeset    _sum=$(cat $FILE | grep -v -e ^TOTAL -e ^=== -e LANG | awk "BEGIN{s=0}{s+=\$${_index}}END{print s}")
+    typeset    _msg
+    if [[ $_tot -eq $_sum ]] ; then
+        _msg="ok"
+    else
+        _msg="ERROR"
+    fi
+    printf "%-20s tot=%12d sum=%12d %s\n" "$_label" "$_tot" "$_sum" "$_msg"
+}
+
+check 2 files
+check 3 lines
+check 4 bytes
+
+if $remove ; then
+    rm -f $FILE
+fi

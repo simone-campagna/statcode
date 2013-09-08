@@ -25,17 +25,27 @@ class ProjectFile(object):
         #print("PRE", self.filepath, self._languages, self.language)
 
     def post_classify(self):
+#        if self.filepath.endswith(".h"):
+#            print("***", self.filepath, self.language, self._languages)
         if self.language is None:
             if self._languages is None:
                 self.language = LanguageClassifier.LANGUAGE_UNCLASSIFIED
             else:
-                for language in self.project_dir.most_common_languages():
-                    assert not language in LanguageClassifier.NO_LANGUAGE_FILES
-                    if language in self._languages:
-                        self.language = language
-                        break
+                project_dir = self.project_dir
+                while project_dir:
+                    for language in project_dir.most_common_languages():
+                        assert not language in LanguageClassifier.NO_LANGUAGE_FILES
+                        if language in self._languages:
+                            self.language = language
+                            #print("HERE A: ", self.filepath, self._languages, self.language, project_dir.dirpath)
+                            break
+                    else:
+                        project_dir = project_dir.parent
+                        continue
+                    break
                 else:
-                    self.language = LanguageClassifier.LANGUAGE_UNCLASSIFIED
+                    self.language = next(iter(self._languages))
+                    #print("HERE Z: ", self.filepath, self._languages, self.language)
 
         # stats
         if self.language in LanguageClassifier.NON_TEXT_FILES:

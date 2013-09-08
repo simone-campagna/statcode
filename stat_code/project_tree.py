@@ -23,11 +23,12 @@ class ProjectTree(ProjectDir, BaseTree):
     def __init__(self, dirpath, parent, project, language=None):
         BaseTree.__init__(self)
         super().__init__(dirpath, parent=parent, project=project, language=language)
-        
-
-    def classify(self):
-        super().classify()
+        self.post_classify()
         self.make_tree_stats()
+
+#    def post_classify(self):
+#        super().post_classify()
+#        self.make_tree_stats()
 
     def make_tree_stats(self):
         self.tree_language_project_files.clear()

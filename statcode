@@ -75,7 +75,7 @@ Show statistics about a source code project.
 
     meta_project = MetaProject()
     for project_dir in args.project_dirs:
-        project_dir = os.path.normpath(os.path.abspath(project_dir))
+        #project_dir = os.path.normpath(os.path.abspath(project_dir))
         project = Project(config_file=args.config, project_dir=project_dir, language_hints=args.language)
         meta_project.add_project(project)
 

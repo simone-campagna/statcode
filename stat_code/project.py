@@ -178,6 +178,7 @@ class Project(BaseProject):
 
     def classify(self):
         self.project_tree = ProjectTree(self.project_dir, None, self)
+        self.project_tree.post_classify()
         self.merge_tree(self.project_tree)
 
 #    def most_common_languages(self):

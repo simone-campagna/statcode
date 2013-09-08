@@ -19,7 +19,7 @@ class ProjectDir(object):
         self.dir_stats = DirStats()
         self.project_dirs = []
         self.project_files = []
-        self.classify()
+        self.pre_classify()
 
     def most_common_languages(self):
         languages = set(self.dir_language_project_files.keys()).difference(LanguageClassifier.NO_LANGUAGE_FILES)
@@ -49,7 +49,7 @@ class ProjectDir(object):
                 return True
         return False
 
-    def classify(self):
+    def pre_classify(self):
         real_dirpath = os.path.realpath(self.dirpath)
         if not os.path.isdir(real_dirpath):
             return
@@ -75,6 +75,8 @@ class ProjectDir(object):
             if project_file.language is not None:
                 self._register_project_file(project_file)
 
+
+    def post_classify(self):
         # post
         for project_file in self.project_files:
             must_register = project_file.language is None
@@ -86,6 +88,9 @@ class ProjectDir(object):
         for project_file in self.project_files:
             self.dir_stats += project_file.stats
             self.dir_language_stats[project_file.language] += project_file.stats
+
+        for project_dir in self.project_dirs:
+            project_dir.post_classify()
 
 #    def get_tree_stats(self):
 #        tree_language_project_files = collections.defaultdict(list)
