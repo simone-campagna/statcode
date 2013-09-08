@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
+
 import argparse
 
 from stat_code.project import *
+from stat_code.language import LanguageClassifier
+
 def main():
     parser = argparse.ArgumentParser(
         description="""\
@@ -15,6 +18,10 @@ Show statistics about a source code project.
     parser.add_argument("project_dirs",
         nargs='+',
         help='project directories')
+
+    parser.add_argument("--config", "-c",
+        required=True,
+        help="config file")
 
     parser.add_argument("--language", "-l",
         metavar="L",
@@ -50,6 +57,10 @@ Show statistics about a source code project.
 
     args = parser.parse_args()
 
+    if not os.path.exists(args.config):
+        sys.stderr.write("ERR: config file {!r} does not exists\n".format(args.config_file))
+        sys.exit(1)
+
     select_languages = getattr(args, 'select_languages', None)
     discard_languages = getattr(args, 'discard_languages', None)
     if select_languages is not None:
@@ -59,12 +70,13 @@ Show statistics about a source code project.
         patterns = discard_languages
         pattern_type='-'
     else:
-        patterns = ProjectFile.NO_LANGUAGES
+        patterns = LanguageClassifier.NO_LANGUAGE_FILES
         pattern_type='-'
 
     meta_project = MetaProject()
     for project_dir in args.project_dirs:
-        project = Project(project_dir, language_hints=args.language)
+        project_dir = os.path.normpath(os.path.abspath(project_dir))
+        project = Project(config_file=args.config, project_dir=project_dir, language_hints=args.language)
         meta_project.add_project(project)
 
     if args.list_language_files:

@@ -6,6 +6,8 @@ import fnmatch
 import collections
 
 from .stats import FileStats, DirStats, TreeStats
+from .language import LanguageClassifier
+from .statcode_config import StatCodeConfig
 from .project_file import ProjectFile
 from .project_dir import ProjectDir
 from .project_tree import ProjectTree, BaseTree
@@ -98,7 +100,7 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
                 table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
 
         for entry in table:
-            if ProjectFile.language_has_stats(entry.language):
+            if LanguageClassifier.language_has_lines_stats(entry.language):
                 fmt = fmt_code
             else:
                 fmt = fmt_data
@@ -140,7 +142,7 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
                 table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
 
         for entry in table:
-            if ProjectFile.language_has_stats(entry.language):
+            if LanguageClassifier.language_has_lines_stats(entry.language):
                 fmt = fmt_code
             else:
                 fmt = fmt_data
@@ -152,8 +154,11 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
 class Project(BaseProject):
     EXCLUDE_DIRS = {'.git', '.svn', 'CVS', '__pycache__'}
     EXCLUDE_FILES = {'.*.swp', '*.pyc', '.gitignore', '.svnignore'}
-    def __init__(self, project_dir, language_hints=None, exclude_dirs=None, exclude_files=None):
+    def __init__(self, config_file, project_dir, language_hints=None, exclude_dirs=None, exclude_files=None):
         super().__init__(project_dir)
+        self.config = StatCodeConfig(config_file)
+        language_config = self.config.get_language_config()
+        self.language_classifier = LanguageClassifier(language_config)
         self.project_dir = project_dir
         if language_hints is None:
             language_hints = ()

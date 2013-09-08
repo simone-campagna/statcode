@@ -5,14 +5,18 @@ import re
 import fnmatch
 import collections
 
-from .statcode_config import StatCodeConfig
 
 class LanguageClassifier(object):
     SHEBANG = '#!'
     LANGUAGE_DATA = '{data}'
-    def __init__(self, config_file):
-        statcode_config = StatCodeConfig(config_file)
-        language_config = statcode_config.get_language_config()
+    LANGUAGE_BROKEN_LINK = '{broken-link}'
+    LANGUAGE_NO_FILE = '{no-file}'
+    LANGUAGE_UNCLASSIFIED = '{unclassified}'
+    NO_LANGUAGE_FILES = {LANGUAGE_DATA, LANGUAGE_BROKEN_LINK, LANGUAGE_NO_FILE, LANGUAGE_UNCLASSIFIED}
+    BINARY_FILES = {LANGUAGE_DATA}
+    NON_TEXT_FILES = {LANGUAGE_DATA, LANGUAGE_BROKEN_LINK, LANGUAGE_NO_FILE}
+    NON_EXISTENT_FILES = {LANGUAGE_BROKEN_LINK, LANGUAGE_NO_FILE}
+    def __init__(self, language_config):
         self._file_extensions = collections.defaultdict(set)
         self._file_extension_re_patterns = collections.defaultdict(set)
         self._file_re_patterns = collections.defaultdict(set)
@@ -33,24 +37,34 @@ class LanguageClassifier(object):
                 re_pattern = re.compile(fnmatch.translate(pattern))
                 self._interpreter_re_patterns[re_pattern].add(language)
 
-    def classify_file(self, filehandle, filepath=None, filename=None):
-        if filepath is None:
-            filepath = filehandle.name # it can fail!
-        languages = self.classify_by_filename(filepath, filename)
-        if languages is None:
-            languages = self.classify_by_content(filehandle, filepath, filename)
-        return languages
+#    def classify_file(self, filehandle, filepath=None, filename=None):
+#        if filepath is None:
+#            filepath = filehandle.name # it can fail!
+#        languages = self.classify_by_filename(filepath, filename)
+#        if languages is None:
+#            languages = self.classify_by_content(filehandle, filepath, filename)
+#        return languages
 
     def classify(self, filepath, filename=None):
+        languages = None
+        if not os.path.exists(os.path.realpath(filepath)):
+            if os.path.lexists(filepath):
+                return {self.LANGUAGE_BROKEN_LINK}
+            else:
+                return {self.LANGUAGE_NO_FILE}
+
         if filename is None:
             filename = os.path.basename(filepath)
+   
         languages = self.classify_by_filename(filepath, filename)
+
         if languages is None:
             try:
                 with open(filepath, 'r') as filehandle:
                     languages = self.classify_by_content(filehandle, filepath, filename)
             except UnicodeDecodeError:
-                return {self.LANGUAGE_DATA}
+                languages = {self.LANGUAGE_DATA}
+
         return languages
 
     def classify_by_filename(self, filepath, filename):
@@ -62,11 +76,11 @@ class LanguageClassifier(object):
                 for re_pattern in self._file_extension_re_patterns[fileext]:
                     if re_pattern.match(filename):
                         return self._file_re_patterns[re_pattern]
-            return self._file_extensions[fileext].copy()
+            return self._file_extensions[fileext]
         # by pattern
         for re_pattern, languages in self._file_re_patterns.items():
             if re_pattern.match(filename):
-                return languages.copy()
+                return languages
         return None
 
     def classify_by_content(self, filehandle, filepath, filename):
@@ -85,17 +99,22 @@ class LanguageClassifier(object):
                 interpreter = os.path.basename(interpreter)
                 for re_pattern, languages in self._interpreter_re_patterns.items():
                     if re_pattern.match(interpreter):
-                        return languages.copy()
+                        return languages
                         break
                 else:
-                    return {interpreter}
+                    languages = {interpreter}
+                    return languages
             else:
                 # no shebang
                 return None
         except UnicodeDecodeError:
-            return {self.LANGUAGE_DATA}
-
+            languages = {self.LANGUAGE_DATA}
+            return languages
         
+    @classmethod
+    def language_has_lines_stats(cls, language):
+        return not language in cls.NON_TEXT_FILES
+
 if __name__ == "__main__":
     language_classifier = LanguageClassifier('languages.ini', 'interpreter.ini')
     import sys

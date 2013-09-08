@@ -5,169 +5,56 @@ import fnmatch
 import collections
 
 from .stats import FileStats
-
-def _invert_dict(d):
-    inv_d = collections.defaultdict(set)
-    for language, extensions in d.items():
-        for extension in extensions:
-            inv_d[extension].add(language)
-    return inv_d
+from .language import LanguageClassifier
 
 class ProjectFile(object):
-    LANGUAGE_EXTENSIONS = {
-        'C': ('.h', '.hpp', '.c', '.c99'),
-        'C++': ('.h', '.hpp', '.C', '.cxx', '.cpp', '.c++', '.C++'),
-        'python': ('.py', ),
-        'shell': ('.sh', '.bash', '.csh', '.tcsh'),
-        'm4': ('.m4', ),
-        'tcl': ('.tcl', ),
-        'autoconf': ('.ac', ),
-        'automake': ('.am', ),
-        'text': ('.txt', ),
-        'cmake': ('.cmake', ),
-        'make': ('.mk', ),
-    }
-    LANGUAGE_PATTERNS = {
-        'cmake': ('CMake*.txt', ),
-        'make': ('Makefile', 'makefile'),
-    }
-    EXTENSION_LANGUAGES = _invert_dict(LANGUAGE_EXTENSIONS)
-    PATTERN_LANGUAGES = _invert_dict(LANGUAGE_PATTERNS)
-    
-    SHEBANG = '#!'
-
-    INTERPRETERS = {
-        'python3*':  'python',
-        'tcl*':      'tcl',
-        'perl*':     'perl',
-    }
-
-    UNCLASSIFIED = '{unclassified}'
-    DATA = '{data}'
-    BROKEN_LINK = '{broken-link}'
-    NO_LANGUAGES = {UNCLASSIFIED, DATA, BROKEN_LINK}
-
     def __init__(self, filepath, project_dir, language=None):
         self.project_dir = project_dir
         self.filepath = filepath
+        self._languages = None
         self.language = language
-        self.stats = FileStats()
-        self.classify()
+        self.stats = None
 
-    def has_stats(self):
-        return self.language_has_stats(self.language)
-
-    @classmethod
-    def language_has_stats(cls, language):
-        return language not in {cls.DATA, cls.BROKEN_LINK}
-
-    def classify(self):
-        if not os.path.exists(os.path.realpath(self.filepath)):
-            self.language = self.BROKEN_LINK
-            return
-
-        dirname, filename = os.path.split(self.filepath)
-        fileroot, fileext = os.path.splitext(filename)
-
-        try:
-            with open(self.filepath, 'r') as filehandle:
-                self._languages = None
-                if self.language is None:
-                    languages = self.guess_languages_filehandle(filehandle, filename, fileext)
-                    if len(languages) == 1:
-                        self.language = tuple(languages)[0]
-                    else:
-                        self._languages = languages
-                self.stats_filehandle(filehandle)
-        except UnicodeDecodeError:
-            if self.language is None: 
-                self.language = self.DATA
-                self.stats += FileStats(0, os.stat(self.filepath).st_size)
-    
-    def stats_filehandle(self, filehandle):
-        filehandle.seek(0)
-        num_lines = 0
-        num_bytes = 0
-        for line in filehandle:
-            num_lines += 1
-            num_bytes += len(line)
-        self.stats += FileStats(num_lines, num_bytes)
-        
+    def pre_classify(self):
+        self._languages = self.project_dir.project.language_classifier.classify(self.filepath)
+        if self._languages is not None:
+            if len(self._languages) == 0:
+                self.language = LanguageClassifier.LANGUAGE_UNCLASSIFIED
+            elif len(self._languages) == 1:
+                self.language = next(iter(self._languages))
+        #print("PRE", self.filepath, self._languages, self.language)
 
     def post_classify(self):
         if self.language is None:
-            self.language = None
-            if self._languages:
+            if self._languages is None:
+                self.language = LanguageClassifier.LANGUAGE_UNCLASSIFIED
+            else:
                 for language in self.project_dir.most_common_languages():
-                    assert not language in self.NO_LANGUAGES
+                    assert not language in LanguageClassifier.NO_LANGUAGE_FILES
                     if language in self._languages:
                         self.language = language
                         break
-
-                if self.language is None:
-                    for language in self.project_dir.language_hints():
-                        if language in self._languages:
-                            self.language = language
-                            break
-
-
-                if self.language is None:
-                    self.language = tuple(self._languages)[0]
-
-            if self.language is None:
-                self.language = self.UNCLASSIFIED
-
-    @classmethod
-    def parse_shebang(cls, filepath):
-        with open(filepath, 'r') as f_in:
-            return cls.parse_shebang_filehandle(f_in)
-
-    @classmethod
-    def parse_shebang_filehandle(cls, filehandle):
-        try:
-            line = filehandle.readline().rstrip()
-            if line.startswith(cls.SHEBANG):
-                l = [e.strip() for e in line[len(cls.SHEBANG):].split()]
-                if l:
-                    if l[0] == '/usr/bin/env' and len(l) > 1:
-                        interpreter = l[1]
-                    else:
-                        interpreter = l[0]
-                interpreter = os.path.basename(interpreter)
-                for pattern, interpreted_language in cls.INTERPRETERS.items():
-                    if fnmatch.fnmatch(interpreter, pattern):
-                        language = interpreted_language
-                        break
                 else:
-                    language = interpreter
-                return language
-        except UnicodeDecodeError:
-            pass
-#        finally:
-#            input("...")
-    
-    @classmethod
-    def guess_languages(cls, filepath):
-        filedir, filename = os.path.split(filepath)
-        fileroot, fileext = os.path.splitext(filename)
-        with open(filepath, 'r') as filehandle:
-            return cls.guess_languages_filehandle(filehandle, filename, fileext)
+                    self.language = LanguageClassifier.LANGUAGE_UNCLASSIFIED
 
-    @classmethod
-    def guess_languages_filehandle(cls, filehandle, filename, fileext):
-        language = cls.parse_shebang_filehandle(filehandle)
-        if language:
-            return {language}
-        else:
-            languages = cls.EXTENSION_LANGUAGES[fileext]
-            if languages:
-                return languages
+        # stats
+        if self.language in LanguageClassifier.NON_TEXT_FILES:
+            if self.language in LanguageClassifier.NON_EXISTENT_FILES:
+                self.stats = FileStats()
             else:
-                for pattern, languages in cls.PATTERN_LANGUAGES.items():
-                    if fnmatch.fnmatch(filename, pattern):
-                        return languages
-                        break
-        return {}
-        
+                self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
+        else:
+            try:
+                with open(self.filepath, 'r') as filehandle:
+                    num_lines = 0
+                    num_bytes = 0
+                    for line in filehandle:
+                        num_bytes += len(line)
+                        num_lines += 1
+                    self.stats = FileStats(lines=num_lines, bytes=num_bytes)
+            except UnicodeDecodeError:
+                self.language = LanguageClassifier.LANGUAGE_DATA
+                self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
+        #print("POST", self.filepath, self._languages, self.language)
         
         
