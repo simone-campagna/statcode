@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+
+from stat_code.language import LanguageClassifier
+
+language_classifier = LanguageClassifier('statcode.ini')
+import sys
+for arg in sys.argv:
+    print(arg, language_classifier.classify(arg))
+
