@@ -27,13 +27,17 @@ from .language_classifier import LanguageClassifier
 class ProjectFile(object):
     def __init__(self, filepath, project_dir, language=None):
         self.project_dir = project_dir
+        self.language_classifier = project_dir.project.language_classifier
         self.filepath = filepath
         self._languages = None
+        self.qualifiers = None
         self.language = language
         self.stats = None
 
     def pre_classify(self):
-        self._languages = self.project_dir.project.language_classifier.classify(self.filepath)
+        qualifiers, self._languages = self.language_classifier.classify(self.filepath)
+        if qualifiers:
+            self.qualifiers = ";".join(qualifiers) + '-'
         if self._languages is not None:
             if len(self._languages) == 0:
                 self.language = LanguageClassifier.LANGUAGE_UNCLASSIFIED
@@ -71,17 +75,20 @@ class ProjectFile(object):
             else:
                 self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
         else:
-            try:
-                with open(self.filepath, 'r') as filehandle:
-                    num_lines = 0
-                    num_bytes = 0
-                    for line in filehandle:
-                        num_bytes += len(line)
-                        num_lines += 1
-                    self.stats = FileStats(lines=num_lines, bytes=num_bytes)
-            except UnicodeDecodeError:
-                self.language = LanguageClassifier.LANGUAGE_DATA
+            if self.language_classifier.language_is_binary(self.language):
                 self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
+            else:
+                try:
+                    with open(self.filepath, 'r') as filehandle:
+                        num_lines = 0
+                        num_bytes = 0
+                        for line in filehandle:
+                            num_bytes += len(line)
+                            num_lines += 1
+                        self.stats = FileStats(lines=num_lines, bytes=num_bytes)
+                except UnicodeDecodeError as e:
+                    self.language = LanguageClassifier.LANGUAGE_DATA
+                    self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
         #print("POST", self.filepath, self._languages, self.language)
         
         

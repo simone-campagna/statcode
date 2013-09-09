@@ -17,13 +17,28 @@
 
 __author__ = 'Simone Campagna'
 
+import os
+
 from .config import Config
 
-class LanguageConfig(Config):
+def _ACTION_REMOVE(filename, fileroot, fileext):
+    filename = fileroot
+    fileroot, fileext = os.path.splitext(filename)
+    return filename, fileroot, fileext
+
+class QualifierConfig(Config):
+
+    __actions__ = {
+        'remove': _ACTION_REMOVE,
+    }
     __defaults__ = {
-        'file_extensions': '',
-        'file_patterns': '',
-        'interpreter_patterns': '',
-        'binary': 'False',
+        'qualifier': '',
+        'action': 'remove',
     }
 
+    def get_extension(self, extension):
+        section = self[extension]
+        qualifier = section['qualifier']
+        action = self.__actions__[section['action']]
+        return qualifier, action
+        

@@ -22,13 +22,17 @@ import os
 from .config import Config
 from .language_config import LanguageConfig
 from .directory_config import DirectoryConfig
+from .qualifier_config import QualifierConfig
 
 class StatCodeConfig(Config):
+    __key_class__ = {
+            'language_config_files': LanguageConfig,
+            'directory_config_files': DirectoryConfig,
+            'qualifier_config_files': QualifierConfig,
+    }
+    __keys__ = list(__key_class__.keys())
     __sections__ = {
-        'config_files': {
-            'language_config_files': '',
-            'directory_config_files': '',
-        }
+        'config_files': dict((key, '') for key in __keys__),
     }
 
     def _absolute_config_files(self, key):
@@ -38,12 +42,14 @@ class StatCodeConfig(Config):
         return filenames
 
     def update(self, cnfg):
-        language_config_files = self._absolute_config_files('language_config_files') + \
-                                cnfg._absolute_config_files('language_config_files')
-        self['config_files']['language_config_files'] = self.list_to_string(language_config_files)
-        directory_config_files = self._absolute_config_files('directory_config_files') + \
-                                 cnfg._absolute_config_files('directory_config_files')
-        self['config_files']['directory_config_files'] = self.list_to_string(directory_config_files)
+        for key in self.__keys__:
+            self.update_key(key, cnfg)
+
+    def update_key(self, key, cnfg):
+        config_files = self._absolute_config_files(key) + \
+                       cnfg._absolute_config_files(key)
+        self['config_files'][key] = self.list_to_string(config_files)
+
 
     def _absolute_files(self, filenames):
         if not self.filename:
@@ -57,23 +63,20 @@ class StatCodeConfig(Config):
                 raise ValueError("config file {!r} does not exists".format(filename))
             abs_filenames.append(filename)
         return abs_filenames
+
+    def get_key_config(self, key):
+        key_config_class = self.__key_class__[key]
+        key_config = key_config_class()
+        for config_file in self.string_to_list(self['config_files'][key]):
+            config_file = self.absolute_filename(config_file)
+            key_config.update(key_config_class(config_file))
+        return key_config
             
     def get_language_config(self):
-        language_config = LanguageConfig()
-        for language_config_file in self.string_to_list(self['config_files']['language_config_files']):
-            if not os.path.isabs(language_config_file):
-                language_config_file = os.path.join(os.path.dirname(self.filename), language_config_file)
-            if not os.path.exists(language_config_file):
-                raise ValueError("language config file {!r} does not exists".format(language_config_file))
-            language_config.update(LanguageConfig(language_config_file))
-        return language_config
+        return self.get_key_config('language_config_files')
 
     def get_directory_config(self):
-        directory_config = DirectoryConfig()
-        for directory_config_file in self.string_to_list(self['config_files']['directory_config_files']):
-            if not os.path.isabs(directory_config_file):
-                directory_config_file = os.path.join(os.path.dirname(self.filename), directory_config_file)
-            if not os.path.exists(directory_config_file):
-                raise ValueError("directory config file {!r} does not exists".format(directory_config_file))
-            directory_config.update(LanguageConfig(directory_config_file))
-        return directory_config
+        return self.get_key_config('directory_config_files')
+
+    def get_qualifier_config(self):
+        return self.get_key_config('qualifier_config_files')

@@ -67,6 +67,20 @@ class Config(configparser.ConfigParser):
             return []
 
     @classmethod
+    def bool_to_string(cls, b):
+        return str(bool(b))
+
+    @classmethod
+    def string_to_bool(cls, s):
+        if s == 'True':
+            return True
+        elif s == 'False':
+            return False
+        else:
+            raise ValueError("invalid value {!r} for bool".format(s))
+            
+
+    @classmethod
     def make_list(cls, *tokens):
         return cls.list_to_string(tokens)
 

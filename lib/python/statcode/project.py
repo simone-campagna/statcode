@@ -60,9 +60,6 @@ class SortKey(object):
 class BaseProject(BaseTree, metaclass=abc.ABCMeta):
     def __init__(self, name):
         self.name = name
-        #self.language_project_files = collections.defaultdict(list)
-        #self.language_dir_stats = collections.defaultdict(DirStats)
-        #self.tot_stats = DirStats()
         super().__init__()
 
     def project_entry(self):
@@ -177,7 +174,8 @@ class Project(BaseProject):
         assert isinstance(config, StatCodeConfig)
         self.config = config
         language_config = self.config.get_language_config()
-        self.language_classifier = LanguageClassifier(language_config)
+        qualifier_config = self.config.get_qualifier_config()
+        self.language_classifier = LanguageClassifier(language_config, qualifier_config)
         self.project_dir = project_dir
         if language_hints is None:
             language_hints = ()
