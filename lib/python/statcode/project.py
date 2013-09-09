@@ -23,11 +23,12 @@ import fnmatch
 import collections
 
 from .stats import FileStats, DirStats, TreeStats
-from .language import LanguageClassifier
+from .language_classifier import LanguageClassifier
 from .statcode_config import StatCodeConfig
 from .project_file import ProjectFile
 from .project_dir import ProjectDir
 from .project_tree import ProjectTree, BaseTree
+from . import patternutils
 
 DirEntry = collections.namedtuple('DirEntry', ('language', 'files', 'lines', 'bytes'))
 FileEntry = collections.namedtuple('FileEntry', ('language', 'lines', 'bytes', 'filepath'))
@@ -128,7 +129,7 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
     def list_language_files(self, language_pattern, *, print_function=print, sort_keys=None):
         languages = []
         for language in self.tree_language_project_files:
-            if fnmatch.fnmatch(language, language_pattern):
+            if fnmatch.fnmatchcase(language, language_pattern):
                 languages.append(language)
         self.list_languages_files(languages, print_function=print_function, sort_keys=sort_keys)
 
@@ -169,22 +170,34 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
 
 
 class Project(BaseProject):
-    EXCLUDE_DIRS = {'.git', '.svn', 'CVS', '__pycache__'}
-    EXCLUDE_FILES = {'.*.swp', '*.pyc', '.gitignore', '.svnignore'}
-    def __init__(self, config_file, project_dir, language_hints=None, exclude_dirs=None, exclude_files=None):
+    def __init__(self, config, project_dir, language_hints=None):
         super().__init__(project_dir)
-        self.config = StatCodeConfig(config_file)
+        if isinstance(config, str):
+            config = StatCodeConfig(config)
+        assert isinstance(config, StatCodeConfig)
+        self.config = config
         language_config = self.config.get_language_config()
         self.language_classifier = LanguageClassifier(language_config)
         self.project_dir = project_dir
         if language_hints is None:
             language_hints = ()
-        if exclude_dirs is None:
-            exclude_dirs = self.EXCLUDE_DIRS
-        self.exclude_dirs = exclude_dirs
-        if exclude_files is None:
-            exclude_files = self.EXCLUDE_FILES
-        self.exclude_files = exclude_files
+        directory_config = self.config.get_directory_config()
+        self.exclude_dir_names = set()
+        self.exclude_dir_matchers = set()
+        self.exclude_file_names = set()
+        self.exclude_file_matchers = set()
+        for section_name in directory_config.sections():
+            section = directory_config[section_name]
+            dir_names, dir_matchers = patternutils.filter_patterns(directory_config.string_to_list(section['exclude_dir_patterns']))
+            self.exclude_dir_names.update(dir_names)
+            self.exclude_dir_matchers.update(dir_matchers)
+            file_names, file_matchers = patternutils.filter_patterns(directory_config.string_to_list(section['exclude_file_patterns']))
+            self.exclude_file_names.update(file_names)
+            self.exclude_file_matchers.update(file_matchers)
+        #print("exclude_dir_names={}".format(self.exclude_dir_names))
+        #print("exclude_dir_matchers={}".format(self.exclude_dir_matchers))
+        #print("exclude_file_names={}".format(self.exclude_file_names))
+        #print("exclude_file_matchers={}".format(self.exclude_file_matchers))
         assert isinstance(language_hints, collections.Sequence)
         self._language_hints = language_hints
         self._directories = {}
@@ -250,11 +263,11 @@ class MetaProject(BaseProject):
             super().report(print_function=print_function, sort_keys=sort_keys, patterns=patterns, pattern_type=pattern_type)
             print("PROJECTS: {}".format(self.num_projects()))
 
-    def _list_language_files(self, language, *, print_function=print, sort_keys=None):
-        self.sort_projects(sort_keys=sort_keys)
-        for project in self.projects:
-            project._list_language_files(language, print_function=print_function, sort_keys=sort_keys)
-
-        if len(self.projects) > 1:
-            super()._list_language_files(language, print_function=print_function, sort_keys=sort_keys)
-            print("PROJECTS: {}".format(self.num_projects()))
+#    def _list_language_files(self, language, *, print_function=print, sort_keys=None):
+#        self.sort_projects(sort_keys=sort_keys)
+#        for project in self.projects:
+#            project._list_language_files(language, print_function=print_function, sort_keys=sort_keys)
+#
+#        if len(self.projects) > 1:
+#            super()._list_language_files(language, print_function=print_function, sort_keys=sort_keys)
+#            print("PROJECTS: {}".format(self.num_projects()))

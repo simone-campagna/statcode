@@ -21,18 +21,59 @@ import os
 
 from .config import Config
 from .language_config import LanguageConfig
+from .directory_config import DirectoryConfig
 
 class StatCodeConfig(Config):
     __sections__ = {
         'config_files': {
-            'language_config_file': '',
+            'language_config_files': '',
+            'directory_config_files': '',
         }
     }
 
+    def _absolute_config_files(self, key):
+        filenames = []
+        for filename in self.string_to_list(self['config_files'][key]):
+            filenames.append(self.absolute_filename(filename))
+        return filenames
+
+    def update(self, cnfg):
+        language_config_files = self._absolute_config_files('language_config_files') + \
+                                cnfg._absolute_config_files('language_config_files')
+        self['config_files']['language_config_files'] = self.list_to_string(language_config_files)
+        directory_config_files = self._absolute_config_files('directory_config_files') + \
+                                 cnfg._absolute_config_files('directory_config_files')
+        self['config_files']['directory_config_files'] = self.list_to_string(directory_config_files)
+
+    def _absolute_files(self, filenames):
+        if not self.filename:
+            return
+        basename = os.path.basename(self.filename)
+        abs_filenames = []
+        for filename in filenames:
+            if not os.path.isabs(filename):
+                filename = os.path.join(os.path.dirname(self.filename), filename)
+            if not os.path.exists(filename):
+                raise ValueError("config file {!r} does not exists".format(filename))
+            abs_filenames.append(filename)
+        return abs_filenames
+            
     def get_language_config(self):
-        language_config_file = self['config_files']['language_config_file']
-        if not os.path.isabs(language_config_file):
-            language_config_file = os.path.join(os.path.dirname(self.filename), language_config_file)
-        if not os.path.exists(language_config_file):
-            raise ValueError("language config file {!r} does not exists".format(language_config_file))
-        return LanguageConfig(language_config_file)
+        language_config = LanguageConfig()
+        for language_config_file in self.string_to_list(self['config_files']['language_config_files']):
+            if not os.path.isabs(language_config_file):
+                language_config_file = os.path.join(os.path.dirname(self.filename), language_config_file)
+            if not os.path.exists(language_config_file):
+                raise ValueError("language config file {!r} does not exists".format(language_config_file))
+            language_config.update(LanguageConfig(language_config_file))
+        return language_config
+
+    def get_directory_config(self):
+        directory_config = DirectoryConfig()
+        for directory_config_file in self.string_to_list(self['config_files']['directory_config_files']):
+            if not os.path.isabs(directory_config_file):
+                directory_config_file = os.path.join(os.path.dirname(self.filename), directory_config_file)
+            if not os.path.exists(directory_config_file):
+                raise ValueError("directory config file {!r} does not exists".format(directory_config_file))
+            directory_config.update(LanguageConfig(directory_config_file))
+        return directory_config

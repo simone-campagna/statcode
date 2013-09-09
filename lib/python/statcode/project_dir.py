@@ -21,9 +21,10 @@ import os
 import fnmatch
 import collections
 
-from .language import LanguageClassifier
+from .language_classifier import LanguageClassifier
 from .project_file import ProjectFile
 from .stats import DirStats, TreeStats
+from . import patternutils
 
 class ProjectDir(object):
     def __init__(self, dirpath, parent, project, language=None):
@@ -60,29 +61,33 @@ class ProjectDir(object):
         #print("reg: ", project_file.filepath, project_file.language, project_file.stats)
         self.dir_language_project_files[project_file.language].append(project_file)
 
-    def _patterns_match(self, patterns, name):
-        for pattern in patterns:
-            if fnmatch.fnmatch(name, pattern):
-                return True
-        return False
+#    def _patterns_match(self, names, patterns, name):
+#        if name in names:
+#            return True
+#        for pattern in patterns:
+#            if fnmatch.fnmatch(name, pattern):
+#                return True
+#        return False
 
     def pre_classify(self):
         real_dirpath = os.path.realpath(self.dirpath)
         if not os.path.isdir(real_dirpath):
             return
 
-        exclude_dirs = self.project.exclude_dirs
-        exclude_files = self.project.exclude_files
+        exclude_dir_names = self.project.exclude_dir_names
+        exclude_dir_matchers = self.project.exclude_dir_matchers
+        exclude_file_names = self.project.exclude_file_names
+        exclude_file_matchers = self.project.exclude_file_matchers
 
         for name in os.listdir(self.dirpath):
             pathname = os.path.join(self.dirpath, name)
             realpathname = os.path.realpath(pathname)
             if os.path.isdir(realpathname):
-                if self._patterns_match(exclude_dirs, name):
+                if patternutils.match_names_or_matchers(exclude_dir_names, exclude_dir_matchers, name):
                     continue
                 self._add_dir(pathname)
             else:
-                if self._patterns_match(exclude_files, name):
+                if patternutils.match_names_or_matchers(exclude_file_names, exclude_file_matchers, name):
                     continue
                 self._add_file(pathname)
     

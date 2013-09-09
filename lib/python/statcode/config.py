@@ -17,6 +17,7 @@
 
 __author__ = 'Simone Campagna'
 
+import os
 import configparser
 
 class Config(configparser.ConfigParser):
@@ -69,3 +70,19 @@ class Config(configparser.ConfigParser):
     def make_list(cls, *tokens):
         return cls.list_to_string(tokens)
 
+    @classmethod
+    def fromfiles(cls, *filenames):
+        if filenames:
+            out_config = cls(filenames[0])
+            for filename in filenames[1:]:
+                out_config.update(cls(filename))
+            return out_config
+
+    def absolute_filename(self, filename):
+        if self.filename is None:
+            return filename
+        if os.path.isabs(filename):
+            return filename
+        else:
+            return os.path.normpath(os.path.abspath(os.path.join(os.path.dirname(self.filename), filename)))
+    

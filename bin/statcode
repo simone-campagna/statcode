@@ -21,7 +21,8 @@ import os
 import argparse
 
 from statcode.project import *
-from statcode.language import LanguageClassifier
+from statcode.statcode_config import StatCodeConfig
+from statcode.language_classifier import LanguageClassifier
 
 STATCODE_HOME_DIR = "@STATCODE_HOME_DIR@"
 
@@ -33,10 +34,11 @@ Show statistics about a source code project.
     )
 
     config_file = os.path.join(STATCODE_HOME_DIR, 'etc', 'statcode', 'statcode.ini')
+    config_files = []
     if not os.path.exists(config_file):
-        config_file = None
         config_required = True
     else:
+        config_files = [config_file]
         config_required = False
 
     sort_keys = ['language', 'files', 'lines', 'bytes']
@@ -46,9 +48,10 @@ Show statistics about a source code project.
         help='project directories')
 
     parser.add_argument("--config", "-c",
-        required=config_required,
-        default=config_file,
-        help="config file")
+        dest="config_files",
+        action="append",
+        default=config_files,
+        help="add config file")
 
     parser.add_argument("--language", "-l",
         metavar="L",
@@ -84,9 +87,15 @@ Show statistics about a source code project.
 
     args = parser.parse_args()
 
-    if not os.path.exists(args.config):
-        sys.stderr.write("ERR: config file {!r} does not exists\n".format(args.config_file))
+    if not args.config_files:
+        sys.stderr.write("ERR: at least 1 config file is required\n")
         sys.exit(1)
+        
+    for config_file in args.config_files:
+        if not os.path.exists(config_file):
+            sys.stderr.write("ERR: config file {!r} does not exists\n".format(config_file))
+            sys.exit(1)
+    statcode_config = StatCodeConfig.fromfiles(*args.config_files)
 
     select_languages = getattr(args, 'select_languages', None)
     discard_languages = getattr(args, 'discard_languages', None)
@@ -103,14 +112,20 @@ Show statistics about a source code project.
     meta_project = MetaProject()
     for project_dir in args.project_dirs:
         project_dir = os.path.normpath(os.path.abspath(project_dir))
-        project = Project(config_file=args.config, project_dir=project_dir, language_hints=args.language)
+        project = Project(config=statcode_config, project_dir=project_dir, language_hints=args.language)
         meta_project.add_project(project)
-
-    if args.list_language_files:
-        for language in args.list_language_files:
-            meta_project.list_language_files(language, sort_keys=args.sort_keys)
-    else:
-        meta_project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type)
+        if args.list_language_files:
+            for language in args.list_language_files:
+                project.list_language_files(language, sort_keys=args.sort_keys)
+        else:
+            project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type)
+    
+    if meta_project.num_projects() > 1:
+        if args.list_language_files:
+            for language in args.list_language_files:
+                meta_project.list_language_files(language, sort_keys=args.sort_keys)
+        else:
+            meta_project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type)
 
 if __name__ == "__main__":
     main()

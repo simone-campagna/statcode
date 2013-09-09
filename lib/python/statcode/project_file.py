@@ -22,7 +22,7 @@ import fnmatch
 import collections
 
 from .stats import FileStats
-from .language import LanguageClassifier
+from .language_classifier import LanguageClassifier
 
 class ProjectFile(object):
     def __init__(self, filepath, project_dir, language=None):

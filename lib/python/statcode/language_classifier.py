@@ -22,6 +22,7 @@ import re
 import fnmatch
 import collections
 
+from . import patternutils
 
 class LanguageClassifier(object):
     SHEBANG = '#!'
@@ -35,24 +36,39 @@ class LanguageClassifier(object):
     NON_EXISTENT_FILES = {LANGUAGE_BROKEN_LINK, LANGUAGE_NO_FILE}
     def __init__(self, language_config):
         self._file_extensions = collections.defaultdict(set)
-        self._file_extension_re_patterns = collections.defaultdict(set)
-        self._file_re_patterns = collections.defaultdict(set)
-        self._interpreter_re_patterns = collections.defaultdict(set)
+        self._file_extension_names = collections.defaultdict(set)
+        self._file_extension_matchers = collections.defaultdict(set)
+        self._file_names = collections.defaultdict(set)
+        self._file_matchers = collections.defaultdict(set)
+        self._interpreter_names = collections.defaultdict(set)
+        self._interpreter_matchers = collections.defaultdict(set)
         # from language_config
         for language in language_config.sections():
             section = language_config[language]
             for extension in language_config.string_to_list(section['file_extensions']):
                 self._file_extensions[os.path.extsep + extension].add(language)
             for pattern in language_config.string_to_list(section['file_patterns']):
-                re_pattern = re.compile(fnmatch.translate(pattern))
+                extensions = set()
                 patternroot, patternext = os.path.splitext(pattern)
                 for extension in self._file_extensions:
                     if fnmatch.fnmatch(extension, patternext):
-                        self._file_extension_re_patterns[extension].add(re_pattern)
-                self._file_re_patterns[re_pattern].add(language)
+                        extensions.add(extension)
+                if patternutils.is_regular_expression(pattern):
+                    matcher = patternutils.get_matcher(pattern)
+                    self._file_matchers[matcher].add(language)
+                    for extension in extensions:
+                        self._file_extension_matchers[extension].add(matcher)
+                else:
+                    self._file_names[pattern].add(language)
+                    for extension in extensions:
+                        self._file_extension_names[extension].add(pattern)
+            
             for pattern in language_config.string_to_list(section['interpreter_patterns']):
-                re_pattern = re.compile(fnmatch.translate(pattern))
-                self._interpreter_re_patterns[re_pattern].add(language)
+                if patternutils.is_regular_expression(pattern):
+                    matcher = patternutils.get_matcher(pattern)
+                    self._interpreter_matchers[matcher].add(language)
+                else:
+                    self._interpreter_names[pattern].add(language)
 
 #    def classify_file(self, filehandle, filepath=None, filename=None):
 #        if filepath is None:
@@ -88,15 +104,22 @@ class LanguageClassifier(object):
         fileroot, fileext = os.path.splitext(filename)
         # by extension
         if fileext in self._file_extensions:
-            if fileext in self._file_extension_re_patterns:
-                # by pattern
-                for re_pattern in self._file_extension_re_patterns[fileext]:
-                    if re_pattern.match(filename):
-                        return self._file_re_patterns[re_pattern]
+            if fileext in self._file_extension_names:
+                # by file name
+                if filename in self._file_extension_names[fileext]:
+                    return self._file_names[filename]
+            if fileext in self._file_extension_matchers:
+                # by file matcher
+                for matcher in self._file_extension_matchers[fileext]:
+                    if matcher(filename):
+                        return self._file_matchers[matcher]
             return self._file_extensions[fileext]
-        # by pattern
-        for re_pattern, languages in self._file_re_patterns.items():
-            if re_pattern.match(filename):
+        # by file name:
+        if filename in self._file_names:
+            return self._file_names[filename]
+        # by file matcher:
+        for matcher, languages in self._file_matchers.items():
+            if matcher(filename):
                 return languages
         return None
 
@@ -114,8 +137,12 @@ class LanguageClassifier(object):
                     else:
                         interpreter = fl[0]
                 interpreter = os.path.basename(interpreter)
-                for re_pattern, languages in self._interpreter_re_patterns.items():
-                    if re_pattern.match(interpreter):
+                # by interpreter name
+                if interpreter in self._interpreter_names:
+                    return self._interpreter_names[interpreter]
+                # by interpreter pattern
+                for matcher, languages in self._interpreter_matchers.items():
+                    if matcher(interpreter):
                         return languages
                         break
                 else:

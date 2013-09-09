@@ -19,10 +19,9 @@ __author__ = 'Simone Campagna'
 
 from .config import Config
 
-class LanguageConfig(Config):
+class DirectoryConfig(Config):
     __defaults__ = {
-        'file_extensions': '',
-        'file_patterns': '',
-        'interpreter_patterns': '',
+        'exclude_dir_patterns': '',
+        'exclude_file_patterns': '',
     }
 
