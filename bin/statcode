@@ -19,6 +19,7 @@ __author__ = 'Simone Campagna'
 
 import os
 import sys
+import time
 import resource
 import argparse
 
@@ -88,7 +89,19 @@ Show statistics about a source code project.
         default=[],
         help='select filetypes matching given pattern')
 
+    parser.add_argument("--verbose", "-v",
+        action="store_true",
+        default=False,
+        help="verbose mode")
+
+    parser.add_argument("--timings", "-t",
+        action="store_true",
+        default=False,
+        help="show timings")
+
     args = parser.parse_args()
+    timings = args.timings
+    verbose = args.verbose or timings
 
     if not args.config_files:
         sys.stderr.write("ERR: at least 1 config file is required\n")
@@ -114,30 +127,40 @@ Show statistics about a source code project.
 #        pattern_type='-'
 
     meta_project = MetaProject(configuration=project_configuration)
-    cum_el_utime = 0.0
-    cum_el_stime = 0.0
+
+    if timings:
+        cum_el_utime = 0.0
+        cum_el_stime = 0.0
+        cum_el_wtime = 0.0
+
     for project_dir in args.project_dirs:
         project_dir = os.path.normpath(os.path.abspath(project_dir))
 
-        sys.stderr.write("# Scanning directory [{}]... ".format(project_dir))
-        sys.stderr.flush()
-
-        rusage0 = resource.getrusage(resource.RUSAGE_SELF)
-        utime0, stime0 = rusage0.ru_utime, rusage0.ru_stime
+        if verbose:
+            sys.stderr.write("# Scanning directory [{}]... ".format(project_dir))
+            sys.stderr.flush()
+            if timings:
+                rusage0 = resource.getrusage(resource.RUSAGE_SELF)
+                utime0, stime0, wtime0 = rusage0.ru_utime, rusage0.ru_stime, time.time()
 
         project = Project(configuration=project_configuration, project_dir=project_dir, filetype_hints=args.filetype)
 
-        rusage1 = resource.getrusage(resource.RUSAGE_SELF)
-        utime1, stime1 = rusage1.ru_utime, rusage1.ru_stime
-        el_utime = utime1 - utime0
-        el_stime = stime1 - stime0
+        if verbose:
+            sys.stderr.write("done:\n")
+            sys.stderr.write("#  {}\n".format(project.tree_stats.result()))
+            if timings:
+                rusage1 = resource.getrusage(resource.RUSAGE_SELF)
+                utime1, stime1, wtime1 = rusage1.ru_utime, rusage1.ru_stime, time.time()
+                el_utime = utime1 - utime0
+                el_stime = stime1 - stime0
+                el_wtime = wtime1 - wtime0
+                cum_el_utime += el_utime
+                cum_el_stime += el_stime
+                cum_el_wtime += el_wtime
 
-        sys.stderr.write("done [{}]\n".format(project.tree_stats.result()))
-        sys.stderr.write("#  [elapsed: user={:.2f} seconds, system={:.2f} seconds]\n".format(el_utime, el_stime))
-        sys.stderr.flush()
+                sys.stderr.write("#  [elapsed: wallclock={:.2f}, user={:.2f} seconds, system={:.2f} seconds]\n".format(el_wtime, el_utime, el_stime))
+            sys.stderr.flush()
 
-        cum_el_utime += el_utime
-        cum_el_stime += el_stime
 
         meta_project.add_project(project)
         #if args.list_filetype_files:
@@ -146,9 +169,12 @@ Show statistics about a source code project.
         #    project.report(sort_keys=args.sort_keys, select_filetypes=args.select_filetypes, group_categories=args.group_categories)
 
     if len(args.project_dirs) > 1:
-        sys.stderr.write("# Scanning [{}] done;\n".format(meta_project.name))
-        sys.stderr.write("#  [elapsed: user={:.2f} seconds, system={:.2f} seconds]\n".format(cum_el_utime, cum_el_stime))
-        sys.stderr.flush()
+        if verbose:
+            sys.stderr.write("# Scanning [{}] done:\n".format(meta_project.name))
+            sys.stderr.write("#  {}\n".format(meta_project.tree_stats.result()))
+            if timings:
+                sys.stderr.write("#  [elapsed: wallclock={:.2f}, user={:.2f} seconds, system={:.2f} seconds]\n".format(cum_el_wtime, cum_el_utime, cum_el_stime))
+            sys.stderr.flush()
     
     if args.list_filetype_files:
         meta_project.list_filetype_files(args.list_filetype_files, sort_keys=args.sort_keys)

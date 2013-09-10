@@ -32,7 +32,7 @@ class ProjectFile(object):
         self._filetypes = None
         self.qualifiers = None
         self.filetype = filetype
-        self.stats = None
+        self.file_stats = None
 
     def pre_classify(self):
         qualifiers, self._filetypes = self.filetype_classifier.classify(self.filepath)
@@ -70,7 +70,7 @@ class ProjectFile(object):
 
         # stats
         if self.filetype in FileTypeClassifier.NON_EXISTENT_FILES:
-            self.stats = FileStats()
+            self.file_stats = FileStats()
         else:
             block_size = self.project_dir.project.block_size
             num_lines = 0
@@ -87,10 +87,10 @@ class ProjectFile(object):
                     num_lines += block.count(newline)
                 if last_block and last_block[-1] != newline:
                     num_lines += 1
-                self.stats = FileStats(lines=num_lines, bytes=num_bytes)
+                self.file_stats = FileStats(lines=num_lines, bytes=num_bytes)
                 
             #if self.filetype_classifier.filetype_is_binary(self.filetype):
-            #    self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
+            #    self.file_stats = FileStats(bytes=os.stat(self.filepath).st_size)
             #else:
             #    try:
             #        with open(self.filepath, 'r') as filehandle:
@@ -99,10 +99,10 @@ class ProjectFile(object):
             #            for line in filehandle:
             #                num_bytes += len(line)
             #                num_lines += 1
-            #            self.stats = FileStats(lines=num_lines, bytes=num_bytes)
+            #            self.file_stats = FileStats(lines=num_lines, bytes=num_bytes)
             #    except UnicodeDecodeError as e:
             #        self.filetype = FileTypeClassifier.FILETYPE_DATA
-            #        self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
+            #        self.file_stats = FileStats(bytes=os.stat(self.filepath).st_size)
         #print("POST", self.filepath, self._filetypes, self.filetype)
         
         

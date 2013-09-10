@@ -189,7 +189,7 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
                 continue
             category = self.filetype_classifier.get_category(filetype)
             for project_file in self.tree_filetype_project_files[filetype]:
-                stats = project_file.stats
+                stats = project_file.file_stats
                 tree_stats += stats
                 table.append(FileEntry(category=category, filetype=filetype, lines=stats.lines, bytes=stats.bytes, filepath=project_file.filepath))
     

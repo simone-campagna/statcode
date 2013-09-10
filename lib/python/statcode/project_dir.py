@@ -58,7 +58,7 @@ class ProjectDir(object):
         self.project_files.append(project_file)
 
     def _register_project_file(self, project_file):
-        #print("reg: ", project_file.filepath, project_file.filetype, project_file.stats)
+        #print("reg: ", project_file.filepath, project_file.filetype, project_file.file_stats)
         self.dir_filetype_project_files[project_file.filetype].append(project_file)
 
 #    def _patterns_match(self, names, patterns, name):
@@ -108,9 +108,9 @@ class ProjectDir(object):
 
         # dir stats
         for project_file in self.project_files:
-            self.dir_stats += project_file.stats
-            self.dir_filetype_stats[project_file.filetype] += project_file.stats
-            #print("d", self.dirpath, project_file.filepath, project_file.stats, self.dir_stats)
+            self.dir_stats += project_file.file_stats
+            self.dir_filetype_stats[project_file.filetype] += project_file.file_stats
+            #print("d", self.dirpath, project_file.filepath, project_file.file_stats, self.dir_stats)
 
         for project_dir in self.project_dirs:
             project_dir.post_classify()
