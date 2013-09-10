@@ -18,6 +18,7 @@
 __author__ = 'Simone Campagna'
 
 import sys
+import time
 
 class OverridingStream(object):
     def __init__(self, stream=None):
@@ -25,6 +26,8 @@ class OverridingStream(object):
         self._last_line_length = None
         
     def write(self, line):
+#        with open("mylog", "a") as f:
+#            f.write(line + '\n')
         if self._last_line_length is None:
             self.stream.write("{}".format(line))
         else:
@@ -39,7 +42,7 @@ class ProgressBar(object):
     EMPTY = ' '
     MESSAGE = "{current_fraction:.1%} "
     def __init__(self,
-                    maximum=100.0,
+                    limit=100.0,
                     *,
                     length=70,
                     current=0.0,
@@ -50,8 +53,10 @@ class ProgressBar(object):
                     block=None,
                     empty=None,
                     stream=None,
+                    maximum=None,
+                    delay=None,
                     **render_args):
-        self.maximum = maximum
+        self.limit = limit
         self.current = current
         self.increment = increment
         self.length = length
@@ -73,17 +78,19 @@ class ProgressBar(object):
         if stream is None:
             stream = OverridingStream(sys.stdout)
         self.stream = stream
+        self.maximum = maximum
+        self.delay = delay
         self.render_args = render_args
              
     def get_line(self,
                 *,
                 current=None,
                 increment=None,
-                maximum=None,
+                limit=None,
                 message=None,
                 **render_args):
-        if maximum is not None:
-            self.maximum = maximum
+        if limit is not None:
+            self.limit = limit
         if message is not None:
             self.message = message
         previous = self.current
@@ -92,19 +99,21 @@ class ProgressBar(object):
                 increment = self.increment
             current = self.current + increment
         self.current = current
-        if self.current > self.maximum:
-            self.maximum = self.current
+        if self.maximum and self.current > self.maximum:
+            self.current = self.maximum
+        if self.current > self.limit:
+            self.limit = self.current
         increment = self.current - previous
 
-        current_fraction = self.current / self.maximum
+        current_fraction = self.current / self.limit
         missing_fraction = 1.0 - current_fraction
         format_d = dict(
             current_fraction=current_fraction,
             missing_fraction=missing_fraction,
             current=self.current,
-            maximum=self.maximum,
+            limit=self.limit,
             increment=increment,
-            missing=self.maximum - self.current)
+            missing=self.limit - self.current)
         format_d.update(self.render_args)
         format_d.update(render_args)
         message = self.message.format(**format_d)
@@ -113,10 +122,10 @@ class ProgressBar(object):
 
         fixed_length = len(message) + len(pre) + len(post)
         variable_length = self.length - fixed_length
-        if self.maximum == 0.0:
+        if self.limit == 0.0:
             block_fraction = 0
         else:
-            block_fraction = self.current / self.maximum
+            block_fraction = self.current / self.limit
         block_length = int(round(block_fraction * variable_length))
         empty_length = variable_length - block_length
         block_num = (block_length + len(self.block) - 1) // len(self.block)
@@ -125,11 +134,12 @@ class ProgressBar(object):
         empty = (self.empty * empty_num)[:empty_length]
 
         line = message + pre + block + empty + post
-        #assert len(line) == self.length
         return line
 
     def render(self, **n_args):
         self.stream.write(self.get_line(**n_args))
+        if self.delay:
+            time.sleep(self.delay)
 
     def initialize(self):
         self.render(current=self.current)
@@ -137,22 +147,37 @@ class ProgressBar(object):
     def finalize(self):
         self.stream.write("")
 
-    def sub_progress_bar(self, intervals, **render_args):
+    def sub_progress_bar(self, intervals, *, next_current=None, next_increment=None, **render_args):
+        if next_current is None:
+            if next_increment is None:
+                next_increment = self.increment
+            next_current = self.current + next_increment
+        next_increment = next_current - self.current
         sub_current = self.current
-        sub_increment = self.increment / intervals
+        sub_increment = next_increment / intervals
+        sub_limit = self.limit
+        sub_maximum = next_current
         args = self.render_args.copy()
         args.update(render_args)
+        #print()
+        #print("-" * 80)
+        #print("-" * 80)
+        #print("self: current={}, increment={}, limit={}, maximum={}".format(self.current, self.increment, self.limit, self.maximum))
+        #print("sub:  current={}, increment={}, limit={}, maximum={}".format(sub_current, sub_increment, sub_limit, sub_maximum))
+        #print("sub:  intervals={}".format(intervals))
         return self.__class__(
                     length=self.length,
-                    maximum=self.maximum,
                     current=sub_current,
                     increment=sub_increment,
+                    maximum=sub_maximum,
+                    limit=sub_limit,
                     message=self.message,
                     pre=self.pre,
                     post=self.post,
                     block=self.block,
                     empty=self.empty,
                     stream=self.stream,
+                    delay=self.delay,
                     **args)
 
 if __name__ == "__main__":

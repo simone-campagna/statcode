@@ -92,39 +92,45 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
         super().merge_tree(project)
 
 
-    def _category_filetypes(self, filetypes, group_categories):
+    def _category_filetypes(self, filetypes, category_actions):
         categories = set((self.filetype_classifier.get_category(filetype) for filetype in filetypes))
-        category_group = {}
-        for category in categories:
-            group = False
-            for category_pattern in group_categories:
-                sign, category_pattern = patternutils.get_signed_pattern(category_pattern)
-                if fnmatch.fnmatchcase(category, category_pattern):
-                    if sign == patternutils.NEGATE_PATTERN:
-                        group = False
-                    else:
-                        group = True
-                category_group[category] = group
+        collapsed_categories = set()
+        hidden_categories = set()
+        for action, category_pattern in category_actions:
+            sign, category_pattern = patternutils.get_signed_pattern(category_pattern)
+            matching_categories = fnmatch.filter(categories, category_pattern)
+            if sign == patternutils.NEGATE_PATTERN:
+                matching_categories = set(categories).difference(matching_categories)
+            if action == 'hide':
+                hidden_categories.update(matching_categories)
+            elif action == 'collapse':
+                collapsed_categories.update(matching_categories)
+            else:
+                assert False
 
         category_filetypes = []
         category_d = collections.defaultdict(list)
         for filetype in filetypes:
             category = self.filetype_classifier.get_category(filetype)
-            if category_group[category]:
+            if category in hidden_categories:
+                #print("hidden ", category)
+                continue
+            if category in collapsed_categories:
+                #print("collapsed ", category)
                 category_d[category].append(filetype)
             else:
+                #print("expanded ", category)
                 category_filetypes.append((category, (filetype, )))
-
         category_filetypes.extend(category_d.items())
         return category_filetypes
         
-    def report(self, *, print_function=print, sort_keys=None, select_filetypes=None, group_categories=None):
+    def report(self, *, print_function=print, sort_keys=None, select_filetypes=None, category_actions=None):
         if self.name:
             print("=== Project[{}]".format(self.name))
         if select_filetypes is None:
             select_filetypes = []
-        if group_categories is None:
-            group_categories = []
+        if category_actions is None:
+            category_actions = []
         filetypes = sorted(self.tree_filetype_project_files.keys(), key=lambda x: x.lower())
         fmt_header = "{category:16} {filetype:16} {files:>12s} {lines:>12s} {bytes:>12s}"
         fmt_body = "{category:16} {filetype:16} {files:12d} {lines:12d} {bytes:12d}"
@@ -138,7 +144,7 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
         #print(filetypes)
         #input("...")
 
-        category_filetypes = self._category_filetypes(filetypes, group_categories)
+        category_filetypes = self._category_filetypes(filetypes, category_actions)
 
         for category, filetypes in category_filetypes:
             if len(filetypes) == 1:
@@ -209,7 +215,7 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
 
 
 class Project(BaseProject):
-    def __init__(self, configuration, project_dir, filetype_hints=None, block_size=None, progress_bar=None):
+    def __init__(self, configuration, project_dir, filetype_hints=None, block_size=None, progress_bar=None, progress_bar_level=1):
         super().__init__(configuration, project_dir)
         self.project_dir = project_dir
         filetype_config = self.filetype_config
@@ -237,6 +243,7 @@ class Project(BaseProject):
             block_size = 1024 * 1024
         self.block_size = block_size
         self.progress_bar = progress_bar
+        self.progress_bar_level = progress_bar_level
         self.classify()
 
     def num_projects(self):
@@ -244,18 +251,13 @@ class Project(BaseProject):
 
     def classify(self):
         self.project_tree = ProjectTree(self.project_dir, None, self)
-        self.project_tree.post_classify()
         self.merge_tree(self.project_tree)
 
-#    def most_common_filetypes(self):
-#        for filetype, files in sorted(((filetype, files) for filetype, files in self.tree_filetype_project_files.items()), key=lambda x: -len(x[1])):
-#            yield filetype
-        
     def filetype_hints(self):
         return iter(self._filetype_hints)
 
 class MetaProject(BaseProject):
-    def __init__(self, configuration, projects=None, progress_bar=None):
+    def __init__(self, configuration, projects=None, progress_bar=None, progress_bar_level=1):
         super().__init__(configuration, 'MetaProject')
         self.projects = []
         if projects:

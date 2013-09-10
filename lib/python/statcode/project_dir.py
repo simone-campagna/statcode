@@ -37,6 +37,12 @@ class ProjectDir(object):
         self.dir_stats = DirStats()
         self.project_dirs = []
         self.project_files = []
+        if self.parent:
+            self.level = self.parent.level + 1
+            self.parent_progress_bar = getattr(self.parent, 'progress_bar', None)
+        else:
+            self.level = 0
+            self.parent_progress_bar = self.project.progress_bar
         self.pre_classify()
 
     def most_common_filetypes(self):
@@ -79,48 +85,78 @@ class ProjectDir(object):
         exclude_file_names = self.project.exclude_file_names
         exclude_file_matchers = self.project.exclude_file_matchers
 
-        if self.parent:
-            # not first level
-            progress_bar = None
-        else:
-            # only at first level
-            progress_bar = self.project.progress_bar
+        dirnames = []
+        filenames = []
         for name in os.listdir(self.dirpath):
             pathname = os.path.join(self.dirpath, name)
             realpathname = os.path.realpath(pathname)
             if os.path.isdir(realpathname):
                 if not patternutils.match_names_or_matchers(exclude_dir_names, exclude_dir_matchers, name):
-                    self._add_dir(pathname)
+                    dirnames.append(pathname)
             else:
                 if not patternutils.match_names_or_matchers(exclude_file_names, exclude_file_matchers, name):
-                    self._add_file(pathname)
+                    filenames.append(pathname)
+
+        if self.level < self.project.progress_bar_level:
+            intervals = 2 * len(dirnames) + 3 * len(filenames)
+            if intervals:
+                progress_bar = self.parent_progress_bar.sub_progress_bar(intervals=intervals)
+            else:
+                progress_bar = None
+        else:
+            progress_bar = None
+        self.progress_bar = progress_bar
+
+        if progress_bar:
+            for pathname in dirnames:
+                self._add_dir(pathname)
+                progress_bar.render(basedir=pathname[-10:])
+            for pathname in filenames:
+                self._add_file(pathname)
+                progress_bar.render(basedir=pathname[-10:])
+        else:
+            for pathname in dirnames:
+                self._add_dir(pathname)
+            for pathname in filenames:
+                self._add_file(pathname)
+
         # pre
-        if progress_bar and self.project_files:
-            progress_bar = progress_bar.sub_progress_bar(intervals=len(self.project_files), basedir=self.dirpath[-10:])
-        for project_file in self.project_files:
-            project_file.pre_classify()
-            if project_file.filetype is not None:
-                self._register_project_file(project_file)
-            if progress_bar:
-                progress_bar.render()
+        if progress_bar:
+            for project_file in self.project_files:
+                project_file.pre_classify()
+                if project_file.filetype is not None:
+                    self._register_project_file(project_file)
+                progress_bar.render(basedir=project_file.filepath[-10:])
+        else:
+            for project_file in self.project_files:
+                project_file.pre_classify()
+                if project_file.filetype is not None:
+                    self._register_project_file(project_file)
 
 
     def post_classify(self):
+        progress_bar = self.progress_bar
+
         # post
         for project_file in self.project_files:
             must_register = project_file.filetype is None
             project_file.post_classify()
             if must_register:
                 self._register_project_file(project_file)
+            if progress_bar:
+                progress_bar.render(basedir=project_file.filepath[-10:])
 
         # dir stats
         for project_file in self.project_files:
             self.dir_stats += project_file.file_stats
             self.dir_filetype_stats[project_file.filetype] += project_file.file_stats
-            #print("d", self.dirpath, project_file.filepath, project_file.file_stats, self.dir_stats)
+            if progress_bar:
+                progress_bar.render(basedir=project_file.filepath[-10:])
 
         for project_dir in self.project_dirs:
             project_dir.post_classify()
+            if progress_bar:
+                progress_bar.render(basedir=project_dir.dirpath[-10:])
 
 #    def get_tree_stats(self):
 #        tree_filetype_project_files = collections.defaultdict(list)
@@ -142,7 +178,6 @@ class ProjectDir(object):
         tree_stats += self.dir_stats
         tree_stats.dirs += 1
         for project_dir in self.project_dirs:
-            #print("+", self.dirpath, tree_stats, '+', project_dir.dirpath, project_dir.dir_stats)
             project_dir._update_tree_stats(
                         tree_filetype_project_files,
                         tree_filetype_stats,

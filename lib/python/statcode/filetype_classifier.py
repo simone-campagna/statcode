@@ -35,6 +35,7 @@ class FileTypeClassifier(object):
     NO_FILETYPE_FILES = {FILETYPE_DATA, FILETYPE_BROKEN_LINK, FILETYPE_NO_FILE, FILETYPE_UNCLASSIFIED, FILETYPE_UNREADABLE}
     BINARY_FILES = {FILETYPE_DATA}
     NON_EXISTENT_FILES = {FILETYPE_BROKEN_LINK, FILETYPE_NO_FILE, FILETYPE_UNREADABLE}
+    DEFAULT_CATEGORY = FileTypeConfig.DEFAULT_CATEGORY
     def __init__(self, filetype_config, qualifier_config):
         self._file_extensions = collections.defaultdict(set)
         self._file_extension_names = collections.defaultdict(set)
@@ -44,7 +45,7 @@ class FileTypeClassifier(object):
         self._interpreter_names = collections.defaultdict(set)
         self._interpreter_matchers = collections.defaultdict(set)
         self._binary_filetypes = set()
-        self._filetype_category = collections.defaultdict(lambda : FileTypeConfig.DEFAULT_CATEGORY)
+        self._filetype_category = collections.defaultdict(lambda : self.DEFAULT_CATEGORY)
         # from filetype_config
         for filetype in filetype_config.sections():
             section = filetype_config[filetype]
