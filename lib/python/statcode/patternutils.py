@@ -22,6 +22,8 @@ import fnmatch
 
 SPECIAL_SYMBOLS = set('*[]!?')
 
+NEGATE_PATTERN = '!'
+
 _CACHED = {}
 
 def special_symbols(pattern):
@@ -55,3 +57,28 @@ def match_names_or_matchers(names, matchers, value):
             return True
     return False
         
+def get_signed_pattern(pattern):
+    if pattern and pattern[0] == NEGATE_PATTERN:
+        sign = NEGATE_PATTERN
+        pattern = pattern[1:]
+    else:
+        sign = ''
+    return sign, pattern
+
+def apply_signed_patterns(items, signed_patterns):
+    all_items = set(items)
+    selected_items = None
+    for signed_pattern in signed_patterns:
+        sign, pattern = get_signed_pattern(signed_pattern)
+        if sign == NEGATE_PATTERN:
+            if selected_items is None:
+                selected_items = set(all_items)
+            selected_items.difference_update(fnmatch.filter(selected_items, pattern))
+        else:
+            if selected_items is None:
+                selected_items = set()
+            selected_items.update(fnmatch.filter(all_items, pattern))
+    if selected_items is None:
+        selected_items = items
+    return selected_items
+

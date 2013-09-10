@@ -18,6 +18,7 @@
 __author__ = 'Simone Campagna'
 
 class FileStats(object):
+    __fields__ = ('lines', 'bytes')
     files = 1
     dirs = 0
     def __init__(self, lines=0, bytes=0):
@@ -36,11 +37,20 @@ class FileStats(object):
         self.lines = 0
         self.bytes = 0
 
+    def tostr(self):
+        return ', '.join("{}={!r}".format(field, getattr(self, field)) for field in self.__fields__)
+
+    def result(self):
+        return ', '.join("{!r} {}".format(getattr(self, field), field) for field in self.__fields__)
+
     def __repr__(self):
-        return "{}(lines={}, bytes={})".format(self.__class__.__name__, self.lines, self.bytes)
-    __str__ = __repr__
+        return "{}({})".format(self.__class__.__name__, self.tostr())
+
+    def __str__(self):
+        return repr(self)
 
 class DirStats(FileStats):
+    __fields__ = ('files', 'lines', 'bytes')
     def __init__(self, files=0, lines=0, bytes=0):
         self.files = files
         super().__init__(lines, bytes)
@@ -58,11 +68,12 @@ class DirStats(FileStats):
         self.files = 0
         super().clear()
 
-    def __repr__(self):
-        return "{}(files={}, lines={}, bytes={})".format(self.__class__.__name__, self.files, self.lines, self.bytes)
-    __str__ = __repr__
+#    def __repr__(self):
+#        return "{}(files={}, lines={}, bytes={})".format(self.__class__.__name__, self.files, self.lines, self.bytes)
+#    __str__ = __repr__
 
 class TreeStats(DirStats):
+    __fields__ = ('dirs', 'files', 'lines', 'bytes')
     def __init__(self, dirs=0, files=0, lines=0, bytes=0):
         self.dirs  = dirs
         super().__init__(files, lines, bytes)
@@ -81,7 +92,7 @@ class TreeStats(DirStats):
         self.dirs = 0
         super().clear()
 
-    def __repr__(self):
-        return "{}(dirs={}, files={}, lines={}, bytes={})".format(self.__class__.__name__, self.dirs, self.files, self.lines, self.bytes)
-    __str__ = __repr__
+#    def __repr__(self):
+#        return "{}(dirs={}, files={}, lines={}, bytes={})".format(self.__class__.__name__, self.dirs, self.files, self.lines, self.bytes)
+#    __str__ = __repr__
 

@@ -18,6 +18,8 @@
 __author__ = 'Simone Campagna'
 
 import os
+import sys
+import resource
 import argparse
 
 from statcode.project import *
@@ -76,21 +78,15 @@ Show statistics about a source code project.
         dest='group_categories',
         metavar="F",
         nargs='+',
-        default=['+*', '-language'],
+        default=['!language'],
         help='group/expand categories matching with given pattern(s)')
 
-    select_discard_group = parser.add_mutually_exclusive_group()
-    select_discard_group.add_argument("--select-filetypes", "-S",
+    parser.add_argument("--select-filetypes", "-S",
         dest='select_filetypes',
         metavar="L",
         nargs='+',
+        default=[],
         help='select filetypes matching given pattern')
-
-    select_discard_group.add_argument("--discard-filetypes", "-D",
-        dest='discard_filetypes',
-        metavar="L",
-        nargs='+',
-        help='discard filetypes matching given pattern')
 
     args = parser.parse_args()
 
@@ -106,35 +102,58 @@ Show statistics about a source code project.
     statcode_config = StatCodeConfig.fromfiles(*args.config_files)
     project_configuration = ProjectConfiguration(statcode_config)
 
-    select_filetypes = getattr(args, 'select_filetypes', None)
-    discard_filetypes = getattr(args, 'discard_filetypes', None)
-    if select_filetypes is not None:
-        patterns = select_filetypes
-        pattern_type='+'
-    elif discard_filetypes is not None:
-        patterns = discard_filetypes
-        pattern_type='-'
-    else:
-        patterns = FileTypeClassifier.NO_FILETYPE_FILES
-        pattern_type='-'
+#    select_filetypes = getattr(args, 'select_filetypes', None)
+#    if select_filetypes is not None:
+#        patterns = select_filetypes
+#        pattern_type='+'
+#    elif discard_filetypes is not None:
+#        patterns = discard_filetypes
+#        pattern_type='-'
+#    else:
+#        patterns = FileTypeClassifier.NO_FILETYPE_FILES
+#        pattern_type='-'
 
     meta_project = MetaProject(configuration=project_configuration)
+    cum_el_utime = 0.0
+    cum_el_stime = 0.0
     for project_dir in args.project_dirs:
         project_dir = os.path.normpath(os.path.abspath(project_dir))
+
+        sys.stderr.write("# Scanning directory [{}]... ".format(project_dir))
+        sys.stderr.flush()
+
+        rusage0 = resource.getrusage(resource.RUSAGE_SELF)
+        utime0, stime0 = rusage0.ru_utime, rusage0.ru_stime
+
         project = Project(configuration=project_configuration, project_dir=project_dir, filetype_hints=args.filetype)
+
+        rusage1 = resource.getrusage(resource.RUSAGE_SELF)
+        utime1, stime1 = rusage1.ru_utime, rusage1.ru_stime
+        el_utime = utime1 - utime0
+        el_stime = stime1 - stime0
+
+        sys.stderr.write("done [{}]\n".format(project.tree_stats.result()))
+        sys.stderr.write("#  [elapsed: user={:.2f} seconds, system={:.2f} seconds]\n".format(el_utime, el_stime))
+        sys.stderr.flush()
+
+        cum_el_utime += el_utime
+        cum_el_stime += el_stime
+
         meta_project.add_project(project)
-        if args.list_filetype_files:
-            for filetype in args.list_filetype_files:
-                project.list_filetype_files(filetype, sort_keys=args.sort_keys)
-        else:
-            project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type, group_categories=args.group_categories)
+        #if args.list_filetype_files:
+        #    project.list_filetype_files(args.list_filetype_files, sort_keys=args.sort_keys)
+        #else:
+        #    project.report(sort_keys=args.sort_keys, select_filetypes=args.select_filetypes, group_categories=args.group_categories)
+
+    if len(args.project_dirs) > 1:
+        sys.stderr.write("# Scanning [{}] done;\n".format(meta_project.name))
+        sys.stderr.write("#  [elapsed: user={:.2f} seconds, system={:.2f} seconds]\n".format(cum_el_utime, cum_el_stime))
+        sys.stderr.flush()
     
-    if meta_project.num_projects() > 1:
-        if args.list_filetype_files:
-            for filetype in args.list_filetype_files:
-                meta_project.list_filetype_files(filetype, sort_keys=args.sort_keys)
-        else:
-            meta_project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type, group_categories=args.group_categories)
+    if args.list_filetype_files:
+        meta_project.list_filetype_files(args.list_filetype_files, sort_keys=args.sort_keys)
+    else:
+        meta_project.report(sort_keys=args.sort_keys, select_filetypes=args.select_filetypes, group_categories=args.group_categories)
 
 if __name__ == "__main__":
     main()
