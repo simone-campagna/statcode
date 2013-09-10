@@ -26,20 +26,20 @@ from .stats import DirStats, TreeStats
 
 class BaseTree(object):
     def __init__(self):
-        self.tree_language_project_files = collections.defaultdict(list)
-        self.tree_language_stats = collections.defaultdict(TreeStats)
+        self.tree_filetype_project_files = collections.defaultdict(list)
+        self.tree_filetype_stats = collections.defaultdict(TreeStats)
         self.tree_stats = TreeStats()
 
     def merge_tree(self, tree):
-        for language, project_files in tree.tree_language_project_files.items():
-            self.tree_language_project_files[language].extend(project_files)
-            self.tree_language_stats[language] += tree.tree_language_stats[language]
+        for filetype, project_files in tree.tree_filetype_project_files.items():
+            self.tree_filetype_project_files[filetype].extend(project_files)
+            self.tree_filetype_stats[filetype] += tree.tree_filetype_stats[filetype]
         self.tree_stats += tree.tree_stats
 
 class ProjectTree(ProjectDir, BaseTree):
-    def __init__(self, dirpath, parent, project, language=None):
+    def __init__(self, dirpath, parent, project, filetype=None):
         BaseTree.__init__(self)
-        super().__init__(dirpath, parent=parent, project=project, language=language)
+        super().__init__(dirpath, parent=parent, project=project, filetype=filetype)
         self.post_classify()
         self.make_tree_stats()
 
@@ -48,11 +48,11 @@ class ProjectTree(ProjectDir, BaseTree):
 #        self.make_tree_stats()
 
     def make_tree_stats(self):
-        self.tree_language_project_files.clear()
-        self.tree_language_stats.clear()
+        self.tree_filetype_project_files.clear()
+        self.tree_filetype_stats.clear()
         self.tree_stats.clear()
         self._update_tree_stats(
-            self.tree_language_project_files,
-            self.tree_language_stats,
+            self.tree_filetype_project_files,
+            self.tree_filetype_stats,
             self.tree_stats
         )

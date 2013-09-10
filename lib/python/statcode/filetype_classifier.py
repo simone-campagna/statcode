@@ -24,18 +24,18 @@ import collections
 
 from . import patternutils
 
-class LanguageClassifier(object):
+class FileTypeClassifier(object):
     SHEBANG = '#!'
-    LANGUAGE_DATA = '{data}'
-    LANGUAGE_BROKEN_LINK = '{broken-link}'
-    LANGUAGE_NO_FILE = '{no-file}'
-    LANGUAGE_UNREADABLE = '{unreadable}'
-    LANGUAGE_UNCLASSIFIED = '{unclassified}'
-    NO_LANGUAGE_FILES = {LANGUAGE_DATA, LANGUAGE_BROKEN_LINK, LANGUAGE_NO_FILE, LANGUAGE_UNCLASSIFIED, LANGUAGE_UNREADABLE}
-    BINARY_FILES = {LANGUAGE_DATA}
-    NON_TEXT_FILES = {LANGUAGE_DATA, LANGUAGE_BROKEN_LINK, LANGUAGE_NO_FILE, LANGUAGE_UNREADABLE}
-    NON_EXISTENT_FILES = {LANGUAGE_BROKEN_LINK, LANGUAGE_NO_FILE, LANGUAGE_UNREADABLE}
-    def __init__(self, language_config, qualifier_config):
+    FILETYPE_DATA = '{data}'
+    FILETYPE_BROKEN_LINK = '{broken-link}'
+    FILETYPE_NO_FILE = '{no-file}'
+    FILETYPE_UNREADABLE = '{unreadable}'
+    FILETYPE_UNCLASSIFIED = '{unclassified}'
+    NO_FILETYPE_FILES = {FILETYPE_DATA, FILETYPE_BROKEN_LINK, FILETYPE_NO_FILE, FILETYPE_UNCLASSIFIED, FILETYPE_UNREADABLE}
+    BINARY_FILES = {FILETYPE_DATA}
+    NON_TEXT_FILES = {FILETYPE_DATA, FILETYPE_BROKEN_LINK, FILETYPE_NO_FILE, FILETYPE_UNREADABLE}
+    NON_EXISTENT_FILES = {FILETYPE_BROKEN_LINK, FILETYPE_NO_FILE, FILETYPE_UNREADABLE}
+    def __init__(self, filetype_config, qualifier_config):
         self._file_extensions = collections.defaultdict(set)
         self._file_extension_names = collections.defaultdict(set)
         self._file_extension_matchers = collections.defaultdict(set)
@@ -43,15 +43,15 @@ class LanguageClassifier(object):
         self._file_matchers = collections.defaultdict(set)
         self._interpreter_names = collections.defaultdict(set)
         self._interpreter_matchers = collections.defaultdict(set)
-        self._binary_languages = set()
-        # from language_config
-        for language in language_config.sections():
-            section = language_config[language]
-            if language_config.string_to_bool(section['binary']):
-                self._binary_languages.add(language)
-            for extension in language_config.string_to_list(section['file_extensions']):
-                self._file_extensions[os.path.extsep + extension].add(language)
-            for pattern in language_config.string_to_list(section['file_patterns']):
+        self._binary_filetypes = set()
+        # from filetype_config
+        for filetype in filetype_config.sections():
+            section = filetype_config[filetype]
+            if filetype_config.string_to_bool(section['binary']):
+                self._binary_filetypes.add(filetype)
+            for extension in filetype_config.string_to_list(section['file_extensions']):
+                self._file_extensions[os.path.extsep + extension].add(filetype)
+            for pattern in filetype_config.string_to_list(section['file_patterns']):
                 extensions = set()
                 patternroot, patternext = os.path.splitext(pattern)
                 for extension in self._file_extensions:
@@ -59,20 +59,20 @@ class LanguageClassifier(object):
                         extensions.add(extension)
                 if patternutils.is_regular_expression(pattern):
                     matcher = patternutils.get_matcher(pattern)
-                    self._file_matchers[matcher].add(language)
+                    self._file_matchers[matcher].add(filetype)
                     for extension in extensions:
                         self._file_extension_matchers[extension].add(matcher)
                 else:
-                    self._file_names[pattern].add(language)
+                    self._file_names[pattern].add(filetype)
                     for extension in extensions:
                         self._file_extension_names[extension].add(pattern)
             
-            for pattern in language_config.string_to_list(section['interpreter_patterns']):
+            for pattern in filetype_config.string_to_list(section['interpreter_patterns']):
                 if patternutils.is_regular_expression(pattern):
                     matcher = patternutils.get_matcher(pattern)
-                    self._interpreter_matchers[matcher].add(language)
+                    self._interpreter_matchers[matcher].add(filetype)
                 else:
-                    self._interpreter_names[pattern].add(language)
+                    self._interpreter_names[pattern].add(filetype)
 
         # from qualifier_config
         self._qualifier = {}
@@ -80,29 +80,29 @@ class LanguageClassifier(object):
             self._qualifier[os.path.extsep + extension] = qualifier_config.get_extension(extension)
  
     def classify(self, filepath, filename=None):
-        languages = None
+        filetypes = None
         if not os.path.exists(os.path.realpath(filepath)):
             if os.path.lexists(filepath):
-                return [], {self.LANGUAGE_BROKEN_LINK}
+                return [], {self.FILETYPE_BROKEN_LINK}
             else:
-                return [], {self.LANGUAGE_NO_FILE}
+                return [], {self.FILETYPE_NO_FILE}
 
         if filename is None:
             filename = os.path.basename(filepath)
    
         fileroot, fileext = os.path.splitext(filename)
-        qualifiers, languages = self.classify_by_filename(filename, fileroot, fileext)
+        qualifiers, filetypes = self.classify_by_filename(filename, fileroot, fileext)
 
-        if languages is None:
+        if filetypes is None:
             try:
                 with open(filepath, 'r') as filehandle:
-                    languages = self.classify_by_content(filehandle, filepath, filename)
+                    filetypes = self.classify_by_content(filehandle, filepath, filename)
             except UnicodeDecodeError:
-                languages = {self.LANGUAGE_DATA}
+                filetypes = {self.FILETYPE_DATA}
             except IOError:
-                languages = {self.LANGUAGE_UNREADABLE}
+                filetypes = {self.FILETYPE_UNREADABLE}
 
-        return qualifiers, languages
+        return qualifiers, filetypes
 
     def classify_by_filename(self, filename, fileroot, fileext):
         qualifiers = []
@@ -113,13 +113,13 @@ class LanguageClassifier(object):
             qualifier, action = self._qualifier[fileext]
             qualifiers.append(qualifier)
             filename, fileroot, fileext = action(filename, fileroot, fileext)
-            next_qualifiers, languages = self.classify_by_filename(filename, fileroot, fileext)
+            next_qualifiers, filetypes = self.classify_by_filename(filename, fileroot, fileext)
             qualifiers.extend(next_qualifiers)
         else:
-            languages = self.classify_languages_by_filename(filename, fileroot, fileext)
-        return qualifiers, languages
+            filetypes = self.classify_filetypes_by_filename(filename, fileroot, fileext)
+        return qualifiers, filetypes
 
-    def classify_languages_by_filename(self, filename, fileroot, fileext):
+    def classify_filetypes_by_filename(self, filename, fileroot, fileext):
         # by extension
         if fileext in self._file_extensions:
             if fileext in self._file_extension_names:
@@ -136,9 +136,9 @@ class LanguageClassifier(object):
         if filename in self._file_names:
             return self._file_names[filename]
         # by file matcher:
-        for matcher, languages in self._file_matchers.items():
+        for matcher, filetypes in self._file_matchers.items():
             if matcher(filename):
-                return languages
+                return filetypes
         return None
 
     def classify_by_content(self, filehandle, filepath, filename):
@@ -159,32 +159,32 @@ class LanguageClassifier(object):
                 if interpreter in self._interpreter_names:
                     return self._interpreter_names[interpreter]
                 # by interpreter pattern
-                for matcher, languages in self._interpreter_matchers.items():
+                for matcher, filetypes in self._interpreter_matchers.items():
                     if matcher(interpreter):
-                        return languages
+                        return filetypes
                         break
                 else:
-                    languages = {interpreter}
-                    return languages
+                    filetypes = {interpreter}
+                    return filetypes
             else:
                 # no shebang
                 return None
         except UnicodeDecodeError:
-            languages = {self.LANGUAGE_DATA}
-            return languages
+            filetypes = {self.FILETYPE_DATA}
+            return filetypes
         except IOError:
-            languages = {self.LANGUAGE_UNREADABLE}
-            return languages
+            filetypes = {self.FILETYPE_UNREADABLE}
+            return filetypes
         
     @classmethod
-    def language_has_lines_stats(cls, language):
-        return not language in cls.NON_TEXT_FILES
+    def filetype_has_lines_stats(cls, filetype):
+        return not filetype in cls.NON_TEXT_FILES
 
-    def language_is_binary(self, language):
-        return language in self._binary_languages
+    def filetype_is_binary(self, filetype):
+        return filetype in self._binary_filetypes
 
 if __name__ == "__main__":
-    language_classifier = LanguageClassifier('languages.ini', 'interpreter.ini')
+    filetype_classifier = FileTypeClassifier('filetypes.ini', 'interpreter.ini')
     import sys
     for arg in sys.argv[1]:
-        print(arg, language_classifier.classify(arg))
+        print(arg, filetype_classifier.classify(arg))

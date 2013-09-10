@@ -23,15 +23,15 @@ import fnmatch
 import collections
 
 from .stats import FileStats, DirStats, TreeStats
-from .language_classifier import LanguageClassifier
+from .filetype_classifier import FileTypeClassifier
 from .statcode_config import StatCodeConfig
 from .project_file import ProjectFile
 from .project_dir import ProjectDir
 from .project_tree import ProjectTree, BaseTree
 from . import patternutils
 
-DirEntry = collections.namedtuple('DirEntry', ('language', 'files', 'lines', 'bytes'))
-FileEntry = collections.namedtuple('FileEntry', ('language', 'lines', 'bytes', 'filepath'))
+DirEntry = collections.namedtuple('DirEntry', ('filetype', 'files', 'lines', 'bytes'))
+FileEntry = collections.namedtuple('FileEntry', ('filetype', 'lines', 'bytes', 'filepath'))
 ProjectEntry = collections.namedtuple('ProjectEntry', ('projects', 'files', 'lines', 'bytes'))
 
 _FIELDS = DirEntry._fields 
@@ -81,32 +81,32 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
             patterns = []
         if pattern_type is None:
             pattern_type = '+'
-        languages = sorted(self.tree_language_project_files.keys(), key=lambda x: x.lower())
-        fmt_header = "{language:16} {files:>12s} {lines:>12s} {bytes:>12s}"
-        fmt_data = "{language:16} {files:12d} {lines:12d} {bytes:12d}"
-        fmt_code = "{language:16} {files:12d} {lines:12d} {bytes:12d}"
-        print_function(fmt_header.format(language='LANGUAGE', files='#FILES', lines='#LINES', bytes='#BYTES', null=''))
+        filetypes = sorted(self.tree_filetype_project_files.keys(), key=lambda x: x.lower())
+        fmt_header = "{filetype:16} {files:>12s} {lines:>12s} {bytes:>12s}"
+        fmt_data = "{filetype:16} {files:12d} {lines:12d} {bytes:12d}"
+        fmt_code = "{filetype:16} {files:12d} {lines:12d} {bytes:12d}"
+        print_function(fmt_header.format(filetype='FILETYPE', files='#FILES', lines='#LINES', bytes='#BYTES', null=''))
         table = []
         tree_stats = TreeStats()
-        languages = set(self.tree_language_stats.keys())
+        filetypes = set(self.tree_filetype_stats.keys())
         if pattern_type == '-':
             for pattern in patterns:
-                languages.difference_update(fnmatch.filter(languages, pattern))
+                filetypes.difference_update(fnmatch.filter(filetypes, pattern))
         else:
-            selected_languages = set()
+            selected_filetypes = set()
             for pattern in patterns:
-                selected_languages.update(fnmatch.filter(languages, pattern))
-            languages = selected_languages
-        for language in languages:
-            language_stats = self.tree_language_stats[language]
+                selected_filetypes.update(fnmatch.filter(filetypes, pattern))
+            filetypes = selected_filetypes
+        for filetype in filetypes:
+            filetype_stats = self.tree_filetype_stats[filetype]
             table.append(DirEntry(
-                language=language,
-                files=language_stats.files,
-                lines=language_stats.lines,
-                bytes=language_stats.bytes))
-            tree_stats += language_stats
+                filetype=filetype,
+                files=filetype_stats.files,
+                lines=filetype_stats.lines,
+                bytes=filetype_stats.bytes))
+            tree_stats += filetype_stats
 
-        table.sort(key=lambda x: x.language)
+        table.sort(key=lambda x: x.filetype)
         if sort_keys:
             for sort_key in sort_keys:
                 assert isinstance(sort_key, SortKey)
@@ -115,40 +115,40 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
                 table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
 
         for entry in table:
-            if LanguageClassifier.language_has_lines_stats(entry.language):
+            if FileTypeClassifier.filetype_has_lines_stats(entry.filetype):
                 fmt = fmt_code
             else:
                 fmt = fmt_data
-            print_function(fmt.format(language=entry.language, files=entry.files, lines=entry.lines, bytes=entry.bytes, null=''))
-        print_function(fmt_code.format(language='TOTAL', files=tree_stats.files, lines=tree_stats.lines, bytes=tree_stats.bytes, null=''))
+            print_function(fmt.format(filetype=entry.filetype, files=entry.files, lines=entry.lines, bytes=entry.bytes, null=''))
+        print_function(fmt_code.format(filetype='TOTAL', files=tree_stats.files, lines=tree_stats.lines, bytes=tree_stats.bytes, null=''))
         print_function()
 
-    def list_language_files(self, language_pattern, *, print_function=print, sort_keys=None):
-        languages = []
-        for language in self.tree_language_project_files:
-            if fnmatch.fnmatchcase(language, language_pattern):
-                languages.append(language)
-        self.list_languages_files(languages, print_function=print_function, sort_keys=sort_keys)
+    def list_filetype_files(self, filetype_pattern, *, print_function=print, sort_keys=None):
+        filetypes = []
+        for filetype in self.tree_filetype_project_files:
+            if fnmatch.fnmatchcase(filetype, filetype_pattern):
+                filetypes.append(filetype)
+        self.list_filetypes_files(filetypes, print_function=print_function, sort_keys=sort_keys)
 
-    def list_languages_files(self, languages, *, print_function=print, sort_keys=None):
+    def list_filetypes_files(self, filetypes, *, print_function=print, sort_keys=None):
         if self.name:
             print("=== Project[{}]".format(self.name))
 
-        fmt_header = "{language:16s} {lines:>12s} {bytes:>12s} {file}"
-        fmt_data = "{language:16s} {lines:12d} {bytes:12d} {file}"
-        fmt_code = "{language:16s} {lines:12d} {bytes:12d} {file}"
-        print_function(fmt_header.format(language='LANGUAGE', lines='#LINES', bytes='#BYTES', file='FILENAME', null=''))
+        fmt_header = "{filetype:16s} {lines:>12s} {bytes:>12s} {file}"
+        fmt_data = "{filetype:16s} {lines:12d} {bytes:12d} {file}"
+        fmt_code = "{filetype:16s} {lines:12d} {bytes:12d} {file}"
+        print_function(fmt_header.format(filetype='FILETYPE', lines='#LINES', bytes='#BYTES', file='FILENAME', null=''))
         table = []
         tree_stats = TreeStats()
-        for language in languages:
-            if not language in self.tree_language_project_files:
+        for filetype in filetypes:
+            if not filetype in self.tree_filetype_project_files:
                 continue
-            for project_file in self.tree_language_project_files[language]:
+            for project_file in self.tree_filetype_project_files[filetype]:
                 stats = project_file.stats
                 tree_stats += stats
-                table.append(FileEntry(language=language, lines=stats.lines, bytes=stats.bytes, filepath=project_file.filepath))
+                table.append(FileEntry(filetype=filetype, lines=stats.lines, bytes=stats.bytes, filepath=project_file.filepath))
     
-        table.sort(key=lambda x: x.language)
+        table.sort(key=lambda x: x.filetype)
         if sort_keys:
             for sort_key in sort_keys:
                 assert isinstance(sort_key, SortKey)
@@ -157,28 +157,28 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
                 table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
 
         for entry in table:
-            if LanguageClassifier.language_has_lines_stats(entry.language):
+            if FileTypeClassifier.filetype_has_lines_stats(entry.filetype):
                 fmt = fmt_code
             else:
                 fmt = fmt_data
-            print_function(fmt.format(language=entry.language, lines=entry.lines, bytes=entry.bytes, file=entry.filepath, null=''))
-        print_function(fmt_code.format(language='TOTAL', lines=tree_stats.lines, bytes=tree_stats.bytes, file='', null=''))
+            print_function(fmt.format(filetype=entry.filetype, lines=entry.lines, bytes=entry.bytes, file=entry.filepath, null=''))
+        print_function(fmt_code.format(filetype='TOTAL', lines=tree_stats.lines, bytes=tree_stats.bytes, file='', null=''))
         print_function()
 
 
 class Project(BaseProject):
-    def __init__(self, config, project_dir, language_hints=None):
+    def __init__(self, config, project_dir, filetype_hints=None):
         super().__init__(project_dir)
         if isinstance(config, str):
             config = StatCodeConfig(config)
         assert isinstance(config, StatCodeConfig)
         self.config = config
-        language_config = self.config.get_language_config()
+        filetype_config = self.config.get_filetype_config()
         qualifier_config = self.config.get_qualifier_config()
-        self.language_classifier = LanguageClassifier(language_config, qualifier_config)
+        self.filetype_classifier = FileTypeClassifier(filetype_config, qualifier_config)
         self.project_dir = project_dir
-        if language_hints is None:
-            language_hints = ()
+        if filetype_hints is None:
+            filetype_hints = ()
         directory_config = self.config.get_directory_config()
         self.exclude_dir_names = set()
         self.exclude_dir_matchers = set()
@@ -196,8 +196,8 @@ class Project(BaseProject):
         #print("exclude_dir_matchers={}".format(self.exclude_dir_matchers))
         #print("exclude_file_names={}".format(self.exclude_file_names))
         #print("exclude_file_matchers={}".format(self.exclude_file_matchers))
-        assert isinstance(language_hints, collections.Sequence)
-        self._language_hints = language_hints
+        assert isinstance(filetype_hints, collections.Sequence)
+        self._filetype_hints = filetype_hints
         self._directories = {}
         self.classify()
 
@@ -209,12 +209,12 @@ class Project(BaseProject):
         self.project_tree.post_classify()
         self.merge_tree(self.project_tree)
 
-#    def most_common_languages(self):
-#        for language, files in sorted(((language, files) for language, files in self.tree_language_project_files.items()), key=lambda x: -len(x[1])):
-#            yield language
+#    def most_common_filetypes(self):
+#        for filetype, files in sorted(((filetype, files) for filetype, files in self.tree_filetype_project_files.items()), key=lambda x: -len(x[1])):
+#            yield filetype
         
-    def language_hints(self):
-        return iter(self._language_hints)
+    def filetype_hints(self):
+        return iter(self._filetype_hints)
 
 class MetaProject(BaseProject):
     def __init__(self, projects=None):
@@ -261,11 +261,11 @@ class MetaProject(BaseProject):
             super().report(print_function=print_function, sort_keys=sort_keys, patterns=patterns, pattern_type=pattern_type)
             print("PROJECTS: {}".format(self.num_projects()))
 
-#    def _list_language_files(self, language, *, print_function=print, sort_keys=None):
+#    def _list_filetype_files(self, filetype, *, print_function=print, sort_keys=None):
 #        self.sort_projects(sort_keys=sort_keys)
 #        for project in self.projects:
-#            project._list_language_files(language, print_function=print_function, sort_keys=sort_keys)
+#            project._list_filetype_files(filetype, print_function=print_function, sort_keys=sort_keys)
 #
 #        if len(self.projects) > 1:
-#            super()._list_language_files(language, print_function=print_function, sort_keys=sort_keys)
+#            super()._list_filetype_files(filetype, print_function=print_function, sort_keys=sort_keys)
 #            print("PROJECTS: {}".format(self.num_projects()))

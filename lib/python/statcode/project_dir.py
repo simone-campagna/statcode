@@ -21,45 +21,45 @@ import os
 import fnmatch
 import collections
 
-from .language_classifier import LanguageClassifier
+from .filetype_classifier import FileTypeClassifier
 from .project_file import ProjectFile
 from .stats import DirStats, TreeStats
 from . import patternutils
 
 class ProjectDir(object):
-    def __init__(self, dirpath, parent, project, language=None):
+    def __init__(self, dirpath, parent, project, filetype=None):
         self.dirpath = dirpath
         self.parent = parent
         self.project = project
-        self.language = language
-        self.dir_language_project_files = collections.defaultdict(list)
-        self.dir_language_stats = collections.defaultdict(DirStats)
+        self.filetype = filetype
+        self.dir_filetype_project_files = collections.defaultdict(list)
+        self.dir_filetype_stats = collections.defaultdict(DirStats)
         self.dir_stats = DirStats()
         self.project_dirs = []
         self.project_files = []
         self.pre_classify()
 
-    def most_common_languages(self):
-        languages = set(self.dir_language_project_files.keys()).difference(LanguageClassifier.NO_LANGUAGE_FILES)
-        l = sorted(((language, len(self.dir_language_project_files[language])) for language in languages),
+    def most_common_filetypes(self):
+        filetypes = set(self.dir_filetype_project_files.keys()).difference(FileTypeClassifier.NO_FILETYPE_FILES)
+        l = sorted(((filetype, len(self.dir_filetype_project_files[filetype])) for filetype in filetypes),
                     key=lambda x: -x[-1])
-        for language, num_files in l:
-            yield language
+        for filetype, num_files in l:
+            yield filetype
    
-    def language_hints(self):
-        return self.project.language_hints()
+    def filetype_hints(self):
+        return self.project.filetype_hints()
 
     def _add_dir(self, dirpath):
-        project_dir = ProjectDir(dirpath, self, self.project, language=self.language)
+        project_dir = ProjectDir(dirpath, self, self.project, filetype=self.filetype)
         self.project_dirs.append(project_dir)
 
     def _add_file(self, filepath):
-        project_file = ProjectFile(filepath, self, language=self.language)
+        project_file = ProjectFile(filepath, self, filetype=self.filetype)
         self.project_files.append(project_file)
 
     def _register_project_file(self, project_file):
-        #print("reg: ", project_file.filepath, project_file.language, project_file.stats)
-        self.dir_language_project_files[project_file.language].append(project_file)
+        #print("reg: ", project_file.filepath, project_file.filetype, project_file.stats)
+        self.dir_filetype_project_files[project_file.filetype].append(project_file)
 
 #    def _patterns_match(self, names, patterns, name):
 #        if name in names:
@@ -94,14 +94,14 @@ class ProjectDir(object):
         # pre
         for project_file in self.project_files:
             project_file.pre_classify()
-            if project_file.language is not None:
+            if project_file.filetype is not None:
                 self._register_project_file(project_file)
 
 
     def post_classify(self):
         # post
         for project_file in self.project_files:
-            must_register = project_file.language is None
+            must_register = project_file.filetype is None
             project_file.post_classify()
             if must_register:
                 self._register_project_file(project_file)
@@ -109,33 +109,33 @@ class ProjectDir(object):
         # dir stats
         for project_file in self.project_files:
             self.dir_stats += project_file.stats
-            self.dir_language_stats[project_file.language] += project_file.stats
+            self.dir_filetype_stats[project_file.filetype] += project_file.stats
 
         for project_dir in self.project_dirs:
             project_dir.post_classify()
 
 #    def get_tree_stats(self):
-#        tree_language_project_files = collections.defaultdict(list)
-#        tree_language_stats = collections.defaultdict(TreeStat)
+#        tree_filetype_project_files = collections.defaultdict(list)
+#        tree_filetype_stats = collections.defaultdict(TreeStat)
 #        tree_stats = TreeStats()
 #        self._update_tree_stats(
-#            tree_language_project_files,
-#            tree_language_stats,
+#            tree_filetype_project_files,
+#            tree_filetype_stats,
 #            tree_stats)
-#        return (tree_language_project_files, tree_language_stats, tree_stats)
+#        return (tree_filetype_project_files, tree_filetype_stats, tree_stats)
 
     def _update_tree_stats(self,
-                        tree_language_project_files,
-                        tree_language_stats,
+                        tree_filetype_project_files,
+                        tree_filetype_stats,
                         tree_stats):
-        for language, project_files in self.dir_language_project_files.items():
-            tree_language_project_files[language].extend(project_files)
-            tree_language_stats[language] += self.dir_language_stats[language]
+        for filetype, project_files in self.dir_filetype_project_files.items():
+            tree_filetype_project_files[filetype].extend(project_files)
+            tree_filetype_stats[filetype] += self.dir_filetype_stats[filetype]
         tree_stats += self.dir_stats
         tree_stats.dirs += 1
         for project_dir in self.project_dirs:
             #print("+", self.dirpath, tree_stats, '+', project_dir.dirpath, project_dir.dir_stats)
             project_dir._update_tree_stats(
-                        tree_language_project_files,
-                        tree_language_stats,
+                        tree_filetype_project_files,
+                        tree_filetype_stats,
                         tree_stats)

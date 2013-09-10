@@ -20,13 +20,13 @@ __author__ = 'Simone Campagna'
 import os
 
 from .config import Config
-from .language_config import LanguageConfig
+from .filetype_config import FileTypeConfig
 from .directory_config import DirectoryConfig
 from .qualifier_config import QualifierConfig
 
 class StatCodeConfig(Config):
     __key_class__ = {
-            'language_config_files': LanguageConfig,
+            'filetype_config_files': FileTypeConfig,
             'directory_config_files': DirectoryConfig,
             'qualifier_config_files': QualifierConfig,
     }
@@ -72,8 +72,8 @@ class StatCodeConfig(Config):
             key_config.update(key_config_class(config_file))
         return key_config
             
-    def get_language_config(self):
-        return self.get_key_config('language_config_files')
+    def get_filetype_config(self):
+        return self.get_key_config('filetype_config_files')
 
     def get_directory_config(self):
         return self.get_key_config('directory_config_files')

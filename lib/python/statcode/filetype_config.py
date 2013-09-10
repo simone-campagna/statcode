@@ -19,7 +19,7 @@ __author__ = 'Simone Campagna'
 
 from .config import Config
 
-class LanguageConfig(Config):
+class FileTypeConfig(Config):
     __defaults__ = {
         'file_extensions': '',
         'file_patterns': '',

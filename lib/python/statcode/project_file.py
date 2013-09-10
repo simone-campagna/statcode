@@ -22,60 +22,60 @@ import fnmatch
 import collections
 
 from .stats import FileStats
-from .language_classifier import LanguageClassifier
+from .filetype_classifier import FileTypeClassifier
 
 class ProjectFile(object):
-    def __init__(self, filepath, project_dir, language=None):
+    def __init__(self, filepath, project_dir, filetype=None):
         self.project_dir = project_dir
-        self.language_classifier = project_dir.project.language_classifier
+        self.filetype_classifier = project_dir.project.filetype_classifier
         self.filepath = filepath
-        self._languages = None
+        self._filetypes = None
         self.qualifiers = None
-        self.language = language
+        self.filetype = filetype
         self.stats = None
 
     def pre_classify(self):
-        qualifiers, self._languages = self.language_classifier.classify(self.filepath)
+        qualifiers, self._filetypes = self.filetype_classifier.classify(self.filepath)
         if qualifiers:
             self.qualifiers = ";".join(qualifiers) + '-'
-        if self._languages is not None:
-            if len(self._languages) == 0:
-                self.language = LanguageClassifier.LANGUAGE_UNCLASSIFIED
-            elif len(self._languages) == 1:
-                self.language = next(iter(self._languages))
-        #print("PRE", self.filepath, self._languages, self.language)
+        if self._filetypes is not None:
+            if len(self._filetypes) == 0:
+                self.filetype = FileTypeClassifier.FILETYPE_UNCLASSIFIED
+            elif len(self._filetypes) == 1:
+                self.filetype = next(iter(self._filetypes))
+        #print("PRE", self.filepath, self._filetypes, self.filetype)
 
     def post_classify(self):
 #        if self.filepath.endswith(".h"):
-#            print("***", self.filepath, self.language, self._languages)
-        if self.language is None:
-            if self._languages is None:
-                self.language = LanguageClassifier.LANGUAGE_UNCLASSIFIED
+#            print("***", self.filepath, self.filetype, self._filetypes)
+        if self.filetype is None:
+            if self._filetypes is None:
+                self.filetype = FileTypeClassifier.FILETYPE_UNCLASSIFIED
             else:
                 project_dir = self.project_dir
                 while project_dir:
-                    for language in project_dir.most_common_languages():
-                        assert not language in LanguageClassifier.NO_LANGUAGE_FILES
-                        if language in self._languages:
-                            self.language = language
-                            #print("HERE A: ", self.filepath, self._languages, self.language, project_dir.dirpath)
+                    for filetype in project_dir.most_common_filetypes():
+                        assert not filetype in FileTypeClassifier.NO_FILETYPE_FILES
+                        if filetype in self._filetypes:
+                            self.filetype = filetype
+                            #print("HERE A: ", self.filepath, self._filetypes, self.filetype, project_dir.dirpath)
                             break
                     else:
                         project_dir = project_dir.parent
                         continue
                     break
                 else:
-                    self.language = next(iter(self._languages))
-                    #print("HERE Z: ", self.filepath, self._languages, self.language)
+                    self.filetype = next(iter(self._filetypes))
+                    #print("HERE Z: ", self.filepath, self._filetypes, self.filetype)
 
         # stats
-        if self.language in LanguageClassifier.NON_TEXT_FILES:
-            if self.language in LanguageClassifier.NON_EXISTENT_FILES:
+        if self.filetype in FileTypeClassifier.NON_TEXT_FILES:
+            if self.filetype in FileTypeClassifier.NON_EXISTENT_FILES:
                 self.stats = FileStats()
             else:
                 self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
         else:
-            if self.language_classifier.language_is_binary(self.language):
+            if self.filetype_classifier.filetype_is_binary(self.filetype):
                 self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
             else:
                 try:
@@ -87,8 +87,8 @@ class ProjectFile(object):
                             num_lines += 1
                         self.stats = FileStats(lines=num_lines, bytes=num_bytes)
                 except UnicodeDecodeError as e:
-                    self.language = LanguageClassifier.LANGUAGE_DATA
+                    self.filetype = FileTypeClassifier.FILETYPE_DATA
                     self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
-        #print("POST", self.filepath, self._languages, self.language)
+        #print("POST", self.filepath, self._filetypes, self.filetype)
         
         

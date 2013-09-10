@@ -22,7 +22,7 @@ import argparse
 
 from statcode.project import *
 from statcode.statcode_config import StatCodeConfig
-from statcode.language_classifier import LanguageClassifier
+from statcode.filetype_classifier import FileTypeClassifier
 
 STATCODE_HOME_DIR = "@STATCODE_HOME_DIR@"
 
@@ -41,7 +41,7 @@ Show statistics about a source code project.
         config_files = [config_file]
         config_required = False
 
-    sort_keys = ['language', 'files', 'lines', 'bytes']
+    sort_keys = ['filetype', 'files', 'lines', 'bytes']
 
     parser.add_argument("project_dirs",
         nargs='+',
@@ -53,37 +53,37 @@ Show statistics about a source code project.
         default=config_files,
         help="add config file")
 
-    parser.add_argument("--language", "-l",
-        metavar="L",
+    parser.add_argument("--filetype", "-f",
+        metavar="F",
         nargs='+',
-        help='project language(s)')
+        help='project filetype(s)')
 
     parser.add_argument("--sort-key", "-k",
         dest='sort_keys',
         metavar="K",
         nargs="+",
-        default=[SortKey('language'), SortKey('files'), SortKey('lines')],
+        default=[SortKey('filetype'), SortKey('files'), SortKey('lines')],
         type=SortKey,
         help='sort keys [{}]'.format(SortKey.choices()))
 
     parser.add_argument("--list-files", "-L",
-        dest='list_language_files',
-        metavar="L",
+        dest='list_filetype_files',
+        metavar="F",
         nargs='+',
-        help='list files for the chosen languages')
+        help='list files for the chosen filetypes')
 
     select_discard_group = parser.add_mutually_exclusive_group()
-    select_discard_group.add_argument("--select-languages", "-S",
-        dest='select_languages',
+    select_discard_group.add_argument("--select-filetypes", "-S",
+        dest='select_filetypes',
         metavar="L",
         nargs='+',
-        help='select languages matching given pattern')
+        help='select filetypes matching given pattern')
 
-    select_discard_group.add_argument("--discard-languages", "-D",
-        dest='discard_languages',
+    select_discard_group.add_argument("--discard-filetypes", "-D",
+        dest='discard_filetypes',
         metavar="L",
         nargs='+',
-        help='discard languages matching given pattern')
+        help='discard filetypes matching given pattern')
 
     args = parser.parse_args()
 
@@ -97,33 +97,33 @@ Show statistics about a source code project.
             sys.exit(1)
     statcode_config = StatCodeConfig.fromfiles(*args.config_files)
 
-    select_languages = getattr(args, 'select_languages', None)
-    discard_languages = getattr(args, 'discard_languages', None)
-    if select_languages is not None:
-        patterns = select_languages
+    select_filetypes = getattr(args, 'select_filetypes', None)
+    discard_filetypes = getattr(args, 'discard_filetypes', None)
+    if select_filetypes is not None:
+        patterns = select_filetypes
         pattern_type='+'
-    elif discard_languages is not None:
-        patterns = discard_languages
+    elif discard_filetypes is not None:
+        patterns = discard_filetypes
         pattern_type='-'
     else:
-        patterns = LanguageClassifier.NO_LANGUAGE_FILES
+        patterns = FileTypeClassifier.NO_FILETYPE_FILES
         pattern_type='-'
 
     meta_project = MetaProject()
     for project_dir in args.project_dirs:
         project_dir = os.path.normpath(os.path.abspath(project_dir))
-        project = Project(config=statcode_config, project_dir=project_dir, language_hints=args.language)
+        project = Project(config=statcode_config, project_dir=project_dir, filetype_hints=args.filetype)
         meta_project.add_project(project)
-        if args.list_language_files:
-            for language in args.list_language_files:
-                project.list_language_files(language, sort_keys=args.sort_keys)
+        if args.list_filetype_files:
+            for filetype in args.list_filetype_files:
+                project.list_filetype_files(filetype, sort_keys=args.sort_keys)
         else:
             project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type)
     
     if meta_project.num_projects() > 1:
-        if args.list_language_files:
-            for language in args.list_language_files:
-                meta_project.list_language_files(language, sort_keys=args.sort_keys)
+        if args.list_filetype_files:
+            for filetype in args.list_filetype_files:
+                meta_project.list_filetype_files(filetype, sort_keys=args.sort_keys)
         else:
             meta_project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type)
 
