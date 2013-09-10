@@ -69,26 +69,40 @@ class ProjectFile(object):
                     #print("HERE Z: ", self.filepath, self._filetypes, self.filetype)
 
         # stats
-        if self.filetype in FileTypeClassifier.NON_TEXT_FILES:
-            if self.filetype in FileTypeClassifier.NON_EXISTENT_FILES:
-                self.stats = FileStats()
-            else:
-                self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
+        if self.filetype in FileTypeClassifier.NON_EXISTENT_FILES:
+            self.stats = FileStats()
         else:
-            if self.filetype_classifier.filetype_is_binary(self.filetype):
-                self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
-            else:
-                try:
-                    with open(self.filepath, 'r') as filehandle:
-                        num_lines = 0
-                        num_bytes = 0
-                        for line in filehandle:
-                            num_bytes += len(line)
-                            num_lines += 1
-                        self.stats = FileStats(lines=num_lines, bytes=num_bytes)
-                except UnicodeDecodeError as e:
-                    self.filetype = FileTypeClassifier.FILETYPE_DATA
-                    self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
+            block_size = self.project_dir.project.block_size
+            num_lines = 0
+            num_bytes = 0
+            newline = b'\n'
+            with open(self.filepath, 'rb') as filehandle:
+                last_block = None
+                while True:
+                    block = filehandle.read(block_size)
+                    if not block:
+                        break
+                    last_block = block
+                    num_bytes += len(block)
+                    num_lines += block.count(newline)
+                if last_block and last_block[-1] != newline:
+                    num_lines += 1
+                self.stats = FileStats(lines=num_lines, bytes=num_bytes)
+                
+            #if self.filetype_classifier.filetype_is_binary(self.filetype):
+            #    self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
+            #else:
+            #    try:
+            #        with open(self.filepath, 'r') as filehandle:
+            #            num_lines = 0
+            #            num_bytes = 0
+            #            for line in filehandle:
+            #                num_bytes += len(line)
+            #                num_lines += 1
+            #            self.stats = FileStats(lines=num_lines, bytes=num_bytes)
+            #    except UnicodeDecodeError as e:
+            #        self.filetype = FileTypeClassifier.FILETYPE_DATA
+            #        self.stats = FileStats(bytes=os.stat(self.filepath).st_size)
         #print("POST", self.filepath, self._filetypes, self.filetype)
         
         

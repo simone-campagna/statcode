@@ -72,6 +72,13 @@ Show statistics about a source code project.
         nargs='+',
         help='list files for the chosen filetypes')
 
+    parser.add_argument("--group-categories", "-G",
+        dest='group_categories',
+        metavar="F",
+        nargs='+',
+        default=['+*', '-language'],
+        help='group/expand categories matching with given pattern(s)')
+
     select_discard_group = parser.add_mutually_exclusive_group()
     select_discard_group.add_argument("--select-filetypes", "-S",
         dest='select_filetypes',
@@ -95,7 +102,9 @@ Show statistics about a source code project.
         if not os.path.exists(config_file):
             sys.stderr.write("ERR: config file {!r} does not exists\n".format(config_file))
             sys.exit(1)
+
     statcode_config = StatCodeConfig.fromfiles(*args.config_files)
+    project_configuration = ProjectConfiguration(statcode_config)
 
     select_filetypes = getattr(args, 'select_filetypes', None)
     discard_filetypes = getattr(args, 'discard_filetypes', None)
@@ -109,23 +118,23 @@ Show statistics about a source code project.
         patterns = FileTypeClassifier.NO_FILETYPE_FILES
         pattern_type='-'
 
-    meta_project = MetaProject()
+    meta_project = MetaProject(configuration=project_configuration)
     for project_dir in args.project_dirs:
         project_dir = os.path.normpath(os.path.abspath(project_dir))
-        project = Project(config=statcode_config, project_dir=project_dir, filetype_hints=args.filetype)
+        project = Project(configuration=project_configuration, project_dir=project_dir, filetype_hints=args.filetype)
         meta_project.add_project(project)
         if args.list_filetype_files:
             for filetype in args.list_filetype_files:
                 project.list_filetype_files(filetype, sort_keys=args.sort_keys)
         else:
-            project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type)
+            project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type, group_categories=args.group_categories)
     
     if meta_project.num_projects() > 1:
         if args.list_filetype_files:
             for filetype in args.list_filetype_files:
                 meta_project.list_filetype_files(filetype, sort_keys=args.sort_keys)
         else:
-            meta_project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type)
+            meta_project.report(sort_keys=args.sort_keys, patterns=patterns, pattern_type=pattern_type, group_categories=args.group_categories)
 
 if __name__ == "__main__":
     main()

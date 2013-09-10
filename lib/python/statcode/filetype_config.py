@@ -20,10 +20,12 @@ __author__ = 'Simone Campagna'
 from .config import Config
 
 class FileTypeConfig(Config):
+    DEFAULT_CATEGORY = '{no-category}'
     __defaults__ = {
+        'binary': 'False',
+        'category': '',
         'file_extensions': '',
         'file_patterns': '',
-        'interpreter_patterns': '',
-        'binary': 'False',
+        'interpreter_patterns': DEFAULT_CATEGORY,
     }
 

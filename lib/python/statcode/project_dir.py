@@ -110,6 +110,7 @@ class ProjectDir(object):
         for project_file in self.project_files:
             self.dir_stats += project_file.stats
             self.dir_filetype_stats[project_file.filetype] += project_file.stats
+            #print("d", self.dirpath, project_file.filepath, project_file.stats, self.dir_stats)
 
         for project_dir in self.project_dirs:
             project_dir.post_classify()

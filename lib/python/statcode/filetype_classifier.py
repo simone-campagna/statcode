@@ -23,6 +23,7 @@ import fnmatch
 import collections
 
 from . import patternutils
+from .filetype_config import FileTypeConfig
 
 class FileTypeClassifier(object):
     SHEBANG = '#!'
@@ -33,7 +34,6 @@ class FileTypeClassifier(object):
     FILETYPE_UNCLASSIFIED = '{unclassified}'
     NO_FILETYPE_FILES = {FILETYPE_DATA, FILETYPE_BROKEN_LINK, FILETYPE_NO_FILE, FILETYPE_UNCLASSIFIED, FILETYPE_UNREADABLE}
     BINARY_FILES = {FILETYPE_DATA}
-    NON_TEXT_FILES = {FILETYPE_DATA, FILETYPE_BROKEN_LINK, FILETYPE_NO_FILE, FILETYPE_UNREADABLE}
     NON_EXISTENT_FILES = {FILETYPE_BROKEN_LINK, FILETYPE_NO_FILE, FILETYPE_UNREADABLE}
     def __init__(self, filetype_config, qualifier_config):
         self._file_extensions = collections.defaultdict(set)
@@ -44,9 +44,11 @@ class FileTypeClassifier(object):
         self._interpreter_names = collections.defaultdict(set)
         self._interpreter_matchers = collections.defaultdict(set)
         self._binary_filetypes = set()
+        self._filetype_category = collections.defaultdict(lambda : FileTypeConfig.DEFAULT_CATEGORY)
         # from filetype_config
         for filetype in filetype_config.sections():
             section = filetype_config[filetype]
+            self._filetype_category[filetype] = section['category']
             if filetype_config.string_to_bool(section['binary']):
                 self._binary_filetypes.add(filetype)
             for extension in filetype_config.string_to_list(section['file_extensions']):
@@ -79,6 +81,9 @@ class FileTypeClassifier(object):
         for extension in qualifier_config.sections():
             self._qualifier[os.path.extsep + extension] = qualifier_config.get_extension(extension)
  
+    def get_category(self, filetype):
+        return self._filetype_category[filetype]
+
     def classify(self, filepath, filename=None):
         filetypes = None
         if not os.path.exists(os.path.realpath(filepath)):
@@ -176,10 +181,6 @@ class FileTypeClassifier(object):
             filetypes = {self.FILETYPE_UNREADABLE}
             return filetypes
         
-    @classmethod
-    def filetype_has_lines_stats(cls, filetype):
-        return not filetype in cls.NON_TEXT_FILES
-
     def filetype_is_binary(self, filetype):
         return filetype in self._binary_filetypes
 

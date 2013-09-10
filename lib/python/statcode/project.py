@@ -30,8 +30,8 @@ from .project_dir import ProjectDir
 from .project_tree import ProjectTree, BaseTree
 from . import patternutils
 
-DirEntry = collections.namedtuple('DirEntry', ('filetype', 'files', 'lines', 'bytes'))
-FileEntry = collections.namedtuple('FileEntry', ('filetype', 'lines', 'bytes', 'filepath'))
+DirEntry = collections.namedtuple('DirEntry', ('category', 'filetype', 'files', 'lines', 'bytes'))
+FileEntry = collections.namedtuple('FileEntry', ('category', 'filetype', 'lines', 'bytes', 'filepath'))
 ProjectEntry = collections.namedtuple('ProjectEntry', ('projects', 'files', 'lines', 'bytes'))
 
 _FIELDS = DirEntry._fields 
@@ -57,8 +57,26 @@ class SortKey(object):
     def choices(cls):
         return '|'.join("[+-]{}".format(k) for k in cls.FIELDS)
 
+class ProjectConfiguration(object):
+    def __init__(self, config):
+        if isinstance(config, str):
+            config = StatCodeConfig(config)
+        assert isinstance(config, StatCodeConfig)
+        self.config = config
+        self.filetype_config = self.config.get_filetype_config()
+        self.qualifier_config = self.config.get_qualifier_config()
+        self.directory_config = self.config.get_directory_config()
+        self.filetype_classifier = FileTypeClassifier(self.filetype_config, self.qualifier_config)
+
 class BaseProject(BaseTree, metaclass=abc.ABCMeta):
-    def __init__(self, name):
+    def __init__(self, configuration, name):
+        assert isinstance(configuration, ProjectConfiguration)
+        self.configuration = configuration
+        self.config = self.configuration.config
+        self.filetype_config = self.configuration.filetype_config
+        self.qualifier_config = self.configuration.qualifier_config
+        self.directory_config = self.configuration.directory_config
+        self.filetype_classifier = self.configuration.filetype_classifier
         self.name = name
         super().__init__()
 
@@ -74,18 +92,49 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
         super().merge_tree(project)
 
 
-    def report(self, *, print_function=print, sort_keys=None, patterns=None, pattern_type='+'):
+    def _category_filetypes(self, filetypes, group_categories):
+        categories = set((self.filetype_classifier.get_category(filetype) for filetype in filetypes))
+        category_group = {}
+        for category in categories:
+            group = False
+            for category_pattern in group_categories:
+                if category_pattern and category_pattern[0] in '+-':
+                    sign = category_pattern[0]
+                    category_pattern = category_pattern[1:]
+                else:
+                    sign = '+'
+                if fnmatch.fnmatchcase(category, category_pattern):
+                    if sign == '+':
+                        group = True
+                    elif sign == '-':
+                        group = False
+                category_group[category] = group
+
+        category_filetypes = []
+        category_d = collections.defaultdict(list)
+        for filetype in filetypes:
+            category = self.filetype_classifier.get_category(filetype)
+            if category_group[category]:
+                category_d[category].append(filetype)
+            else:
+                category_filetypes.append((category, (filetype, )))
+
+        category_filetypes.extend(category_d.items())
+        return category_filetypes
+        
+    def report(self, *, print_function=print, sort_keys=None, patterns=None, pattern_type='+', group_categories=None):
         if self.name:
             print("=== Project[{}]".format(self.name))
         if patterns is None:
             patterns = []
         if pattern_type is None:
             pattern_type = '+'
+        if group_categories is None:
+            group_categories = []
         filetypes = sorted(self.tree_filetype_project_files.keys(), key=lambda x: x.lower())
-        fmt_header = "{filetype:16} {files:>12s} {lines:>12s} {bytes:>12s}"
-        fmt_data = "{filetype:16} {files:12d} {lines:12d} {bytes:12d}"
-        fmt_code = "{filetype:16} {files:12d} {lines:12d} {bytes:12d}"
-        print_function(fmt_header.format(filetype='FILETYPE', files='#FILES', lines='#LINES', bytes='#BYTES', null=''))
+        fmt_header = "{category:16} {filetype:16} {files:>12s} {lines:>12s} {bytes:>12s}"
+        fmt_body = "{category:16} {filetype:16} {files:12d} {lines:12d} {bytes:12d}"
+        print_function(fmt_header.format(category='CATEGORY', filetype='FILETYPE', files='#FILES', lines='#LINES', bytes='#BYTES', null=''))
         table = []
         tree_stats = TreeStats()
         filetypes = set(self.tree_filetype_stats.keys())
@@ -97,14 +146,25 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
             for pattern in patterns:
                 selected_filetypes.update(fnmatch.filter(filetypes, pattern))
             filetypes = selected_filetypes
-        for filetype in filetypes:
-            filetype_stats = self.tree_filetype_stats[filetype]
+
+        category_filetypes = self._category_filetypes(filetypes, group_categories)
+
+        for category, filetypes in category_filetypes:
+            if len(filetypes) == 1:
+                category_filetype = filetypes[0]
+                category_stats = self.tree_filetype_stats[category_filetype]
+            else:
+                category_stats = TreeStats()
+                for filetype in filetypes:
+                    category_stats += self.tree_filetype_stats[filetype]
+                category_filetype = ''
             table.append(DirEntry(
-                filetype=filetype,
-                files=filetype_stats.files,
-                lines=filetype_stats.lines,
-                bytes=filetype_stats.bytes))
-            tree_stats += filetype_stats
+                category=category,
+                filetype=category_filetype,
+                files=category_stats.files,
+                lines=category_stats.lines,
+                bytes=category_stats.bytes))
+            tree_stats += category_stats
 
         table.sort(key=lambda x: x.filetype)
         if sort_keys:
@@ -115,12 +175,8 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
                 table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
 
         for entry in table:
-            if FileTypeClassifier.filetype_has_lines_stats(entry.filetype):
-                fmt = fmt_code
-            else:
-                fmt = fmt_data
-            print_function(fmt.format(filetype=entry.filetype, files=entry.files, lines=entry.lines, bytes=entry.bytes, null=''))
-        print_function(fmt_code.format(filetype='TOTAL', files=tree_stats.files, lines=tree_stats.lines, bytes=tree_stats.bytes, null=''))
+            print_function(fmt_body.format(category=entry.category, filetype=entry.filetype, files=entry.files, lines=entry.lines, bytes=entry.bytes, null=''))
+        print_function(fmt_body.format(category='', filetype='TOTAL', files=tree_stats.files, lines=tree_stats.lines, bytes=tree_stats.bytes, null=''))
         print_function()
 
     def list_filetype_files(self, filetype_pattern, *, print_function=print, sort_keys=None):
@@ -134,19 +190,19 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
         if self.name:
             print("=== Project[{}]".format(self.name))
 
-        fmt_header = "{filetype:16s} {lines:>12s} {bytes:>12s} {file}"
-        fmt_data = "{filetype:16s} {lines:12d} {bytes:12d} {file}"
-        fmt_code = "{filetype:16s} {lines:12d} {bytes:12d} {file}"
-        print_function(fmt_header.format(filetype='FILETYPE', lines='#LINES', bytes='#BYTES', file='FILENAME', null=''))
+        fmt_header = "{category:16} {filetype:16s} {lines:>12s} {bytes:>12s} {file}"
+        fmt_body = "{category:16} {filetype:16s} {lines:12d} {bytes:12d} {file}"
+        print_function(fmt_header.format(category='CATEGORY', filetype='FILETYPE', lines='#LINES', bytes='#BYTES', file='FILENAME', null=''))
         table = []
         tree_stats = TreeStats()
         for filetype in filetypes:
             if not filetype in self.tree_filetype_project_files:
                 continue
+            category = self.filetype_classifier.get_category(filetype)
             for project_file in self.tree_filetype_project_files[filetype]:
                 stats = project_file.stats
                 tree_stats += stats
-                table.append(FileEntry(filetype=filetype, lines=stats.lines, bytes=stats.bytes, filepath=project_file.filepath))
+                table.append(FileEntry(category=category, filetype=filetype, lines=stats.lines, bytes=stats.bytes, filepath=project_file.filepath))
     
         table.sort(key=lambda x: x.filetype)
         if sort_keys:
@@ -157,29 +213,22 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
                 table.sort(key=lambda x: getattr(x, sort_key.key), reverse=sort_key.reverse)
 
         for entry in table:
-            if FileTypeClassifier.filetype_has_lines_stats(entry.filetype):
-                fmt = fmt_code
-            else:
-                fmt = fmt_data
-            print_function(fmt.format(filetype=entry.filetype, lines=entry.lines, bytes=entry.bytes, file=entry.filepath, null=''))
-        print_function(fmt_code.format(filetype='TOTAL', lines=tree_stats.lines, bytes=tree_stats.bytes, file='', null=''))
+            print_function(fmt_body.format(category=category, filetype=entry.filetype, lines=entry.lines, bytes=entry.bytes, file=entry.filepath, null=''))
+        print_function(fmt_body.format(category='', filetype='TOTAL', lines=tree_stats.lines, bytes=tree_stats.bytes, file='', null=''))
         print_function()
 
 
+
 class Project(BaseProject):
-    def __init__(self, config, project_dir, filetype_hints=None):
-        super().__init__(project_dir)
-        if isinstance(config, str):
-            config = StatCodeConfig(config)
-        assert isinstance(config, StatCodeConfig)
-        self.config = config
-        filetype_config = self.config.get_filetype_config()
-        qualifier_config = self.config.get_qualifier_config()
-        self.filetype_classifier = FileTypeClassifier(filetype_config, qualifier_config)
+    def __init__(self, configuration, project_dir, filetype_hints=None, block_size=None):
+        super().__init__(configuration, project_dir)
         self.project_dir = project_dir
+        filetype_config = self.filetype_config
+        directory_config = self.directory_config
+        qualifier_config = self.qualifier_config
+
         if filetype_hints is None:
             filetype_hints = ()
-        directory_config = self.config.get_directory_config()
         self.exclude_dir_names = set()
         self.exclude_dir_matchers = set()
         self.exclude_file_names = set()
@@ -192,13 +241,12 @@ class Project(BaseProject):
             file_names, file_matchers = patternutils.filter_patterns(directory_config.string_to_list(section['exclude_file_patterns']))
             self.exclude_file_names.update(file_names)
             self.exclude_file_matchers.update(file_matchers)
-        #print("exclude_dir_names={}".format(self.exclude_dir_names))
-        #print("exclude_dir_matchers={}".format(self.exclude_dir_matchers))
-        #print("exclude_file_names={}".format(self.exclude_file_names))
-        #print("exclude_file_matchers={}".format(self.exclude_file_matchers))
         assert isinstance(filetype_hints, collections.Sequence)
         self._filetype_hints = filetype_hints
         self._directories = {}
+        if block_size is None:
+            block_size = 1024 * 1024
+        self.block_size = block_size
         self.classify()
 
     def num_projects(self):
@@ -217,8 +265,8 @@ class Project(BaseProject):
         return iter(self._filetype_hints)
 
 class MetaProject(BaseProject):
-    def __init__(self, projects=None):
-        super().__init__('MetaProject')
+    def __init__(self, configuration, projects=None):
+        super().__init__(configuration, 'MetaProject')
         self.projects = []
         if projects:
             for project in projects:
@@ -252,13 +300,13 @@ class MetaProject(BaseProject):
             pl.sort(key=lambda x: getattr(x[0], sort_key.key), reverse=sort_key.reverse)
         self.projects = [x[1] for x in pl]
 
-    def report(self, *, print_function=print, sort_keys=None, patterns=None, pattern_type=None):
+    def report(self, *, print_function=print, sort_keys=None, **n_args):
         self.sort_projects(sort_keys=sort_keys)
         for project in self.projects:
-            project.report(print_function=print_function, sort_keys=sort_keys, patterns=patterns, pattern_type=pattern_type)
+            project.report(print_function=print_function, sort_keys=sort_keys, **n_args)
 
         if len(self.projects) > 1:
-            super().report(print_function=print_function, sort_keys=sort_keys, patterns=patterns, pattern_type=pattern_type)
+            super().report(print_function=print_function, sort_keys=sort_keys, **n_args)
             print("PROJECTS: {}".format(self.num_projects()))
 
 #    def _list_filetype_files(self, filetype, *, print_function=print, sort_keys=None):
