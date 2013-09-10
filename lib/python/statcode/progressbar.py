@@ -37,7 +37,7 @@ class ProgressBar(object):
     POST = ']'
     BLOCK = '#'
     EMPTY = ' '
-    MESSAGE = "{current_fraction:6.1%} "
+    MESSAGE = "{current_fraction:.1%} "
     def __init__(self,
                     maximum=100.0,
                     *,

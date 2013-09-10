@@ -165,7 +165,10 @@ Show statistics about a source code project.
 
         project = Project(configuration=project_configuration, project_dir=project_dir, filetype_hints=args.filetype)
         if show_progress_bar:
-            progress_bar.render(increment=1)
+            basedir = os.path.basename(project_dir)
+            if len(basedir) > 10:
+                basedir = "..." + basedir[-7:]
+            progress_bar.render(increment=1, message="{{current_fraction:.1%}} {basedir} ".format(basedir=basedir))
 
         if verbose:
             sys.stderr.write("done:\n")
