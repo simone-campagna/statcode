@@ -26,6 +26,7 @@ import argparse
 from statcode.project import *
 from statcode.statcode_config import StatCodeConfig
 from statcode.filetype_classifier import FileTypeClassifier
+from statcode.progressbar import ProgressBar
 
 STATCODE_HOME_DIR = "@STATCODE_HOME_DIR@"
 
@@ -99,9 +100,24 @@ Show statistics about a source code project.
         default=False,
         help="show timings")
 
+    parser.add_argument("--progressbar", "-p",
+        dest="show_progress_bar",
+        action="store_true",
+        default=None,
+        help="show progressbar")
+
+    parser.add_argument("--no-progressbar", "-P",
+        dest="show_progress_bar",
+        action="store_false",
+        default=None,
+        help="hide progressbar")
+
     args = parser.parse_args()
     timings = args.timings
     verbose = args.verbose or timings
+    show_progress_bar = args.show_progress_bar
+    if show_progress_bar is None:
+        show_progress_bar = not (verbose or timings or len(args.project_dirs) <= 1)
 
     if not args.config_files:
         sys.stderr.write("ERR: at least 1 config file is required\n")
@@ -133,6 +149,10 @@ Show statistics about a source code project.
         cum_el_stime = 0.0
         cum_el_wtime = 0.0
 
+    if show_progress_bar:
+        progress_bar = ProgressBar(maximum=len(args.project_dirs))
+        progress_bar.initialize()
+
     for project_dir in args.project_dirs:
         project_dir = os.path.normpath(os.path.abspath(project_dir))
 
@@ -144,6 +164,8 @@ Show statistics about a source code project.
                 utime0, stime0, wtime0 = rusage0.ru_utime, rusage0.ru_stime, time.time()
 
         project = Project(configuration=project_configuration, project_dir=project_dir, filetype_hints=args.filetype)
+        if show_progress_bar:
+            progress_bar.render(increment=1)
 
         if verbose:
             sys.stderr.write("done:\n")
@@ -167,6 +189,9 @@ Show statistics about a source code project.
         #    project.list_filetype_files(args.list_filetype_files, sort_keys=args.sort_keys)
         #else:
         #    project.report(sort_keys=args.sort_keys, select_filetypes=args.select_filetypes, group_categories=args.group_categories)
+
+    if show_progress_bar:
+        progress_bar.finalize()
 
     if len(args.project_dirs) > 1:
         if verbose:
