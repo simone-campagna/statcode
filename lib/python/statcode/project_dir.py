@@ -79,23 +79,30 @@ class ProjectDir(object):
         exclude_file_names = self.project.exclude_file_names
         exclude_file_matchers = self.project.exclude_file_matchers
 
+        if self.parent:
+            # not first level
+            progress_bar = None
+        else:
+            # only at first level
+            progress_bar = self.project.progress_bar
         for name in os.listdir(self.dirpath):
             pathname = os.path.join(self.dirpath, name)
             realpathname = os.path.realpath(pathname)
             if os.path.isdir(realpathname):
-                if patternutils.match_names_or_matchers(exclude_dir_names, exclude_dir_matchers, name):
-                    continue
-                self._add_dir(pathname)
+                if not patternutils.match_names_or_matchers(exclude_dir_names, exclude_dir_matchers, name):
+                    self._add_dir(pathname)
             else:
-                if patternutils.match_names_or_matchers(exclude_file_names, exclude_file_matchers, name):
-                    continue
-                self._add_file(pathname)
-    
+                if not patternutils.match_names_or_matchers(exclude_file_names, exclude_file_matchers, name):
+                    self._add_file(pathname)
         # pre
+        if progress_bar and self.project_files:
+            progress_bar = progress_bar.sub_progress_bar(intervals=len(self.project_files), basedir=self.dirpath[-10:])
         for project_file in self.project_files:
             project_file.pre_classify()
             if project_file.filetype is not None:
                 self._register_project_file(project_file)
+            if progress_bar:
+                progress_bar.render()
 
 
     def post_classify(self):

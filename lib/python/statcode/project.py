@@ -209,7 +209,7 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
 
 
 class Project(BaseProject):
-    def __init__(self, configuration, project_dir, filetype_hints=None, block_size=None):
+    def __init__(self, configuration, project_dir, filetype_hints=None, block_size=None, progress_bar=None):
         super().__init__(configuration, project_dir)
         self.project_dir = project_dir
         filetype_config = self.filetype_config
@@ -236,6 +236,7 @@ class Project(BaseProject):
         if block_size is None:
             block_size = 1024 * 1024
         self.block_size = block_size
+        self.progress_bar = progress_bar
         self.classify()
 
     def num_projects(self):
@@ -254,7 +255,7 @@ class Project(BaseProject):
         return iter(self._filetype_hints)
 
 class MetaProject(BaseProject):
-    def __init__(self, configuration, projects=None):
+    def __init__(self, configuration, projects=None, progress_bar=None):
         super().__init__(configuration, 'MetaProject')
         self.projects = []
         if projects:

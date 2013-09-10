@@ -150,8 +150,10 @@ Show statistics about a source code project.
         cum_el_wtime = 0.0
 
     if show_progress_bar:
-        progress_bar = ProgressBar(maximum=len(args.project_dirs))
+        progress_bar = ProgressBar(maximum=len(args.project_dirs), post="] {current_fraction:.1%} {basedir:>10.10}", basedir='')
         progress_bar.initialize()
+    else:
+        progress_bar = None
 
     for project_dir in args.project_dirs:
         project_dir = os.path.normpath(os.path.abspath(project_dir))
@@ -163,12 +165,10 @@ Show statistics about a source code project.
                 rusage0 = resource.getrusage(resource.RUSAGE_SELF)
                 utime0, stime0, wtime0 = rusage0.ru_utime, rusage0.ru_stime, time.time()
 
-        project = Project(configuration=project_configuration, project_dir=project_dir, filetype_hints=args.filetype)
+        project = Project(configuration=project_configuration, project_dir=project_dir, filetype_hints=args.filetype, progress_bar=progress_bar)
+
         if show_progress_bar:
-            basedir = os.path.basename(project_dir)
-            if len(basedir) > 10:
-                basedir = "..." + basedir[-7:]
-            progress_bar.render(increment=1, message="{{current_fraction:.1%}} {basedir} ".format(basedir=basedir))
+            progress_bar.render(increment=1, basedir=project_dir[-10:])
 
         if verbose:
             sys.stderr.write("done:\n")

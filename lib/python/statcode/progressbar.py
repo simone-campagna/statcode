@@ -49,7 +49,8 @@ class ProgressBar(object):
                     post=None,
                     block=None,
                     empty=None,
-                    stream=None):
+                    stream=None,
+                    **render_args):
         self.maximum = maximum
         self.current = current
         self.increment = increment
@@ -72,13 +73,15 @@ class ProgressBar(object):
         if stream is None:
             stream = OverridingStream(sys.stdout)
         self.stream = stream
+        self.render_args = render_args
              
     def get_line(self,
                 *,
                 current=None,
                 increment=None,
                 maximum=None,
-                message=None):
+                message=None,
+                **render_args):
         if maximum is not None:
             self.maximum = maximum
         if message is not None:
@@ -102,6 +105,8 @@ class ProgressBar(object):
             maximum=self.maximum,
             increment=increment,
             missing=self.maximum - self.current)
+        format_d.update(self.render_args)
+        format_d.update(render_args)
         message = self.message.format(**format_d)
         pre = self.pre.format(**format_d)
         post = self.post.format(**format_d)
@@ -131,6 +136,24 @@ class ProgressBar(object):
 
     def finalize(self):
         self.stream.write("")
+
+    def sub_progress_bar(self, intervals, **render_args):
+        sub_current = self.current
+        sub_increment = self.increment / intervals
+        args = self.render_args.copy()
+        args.update(render_args)
+        return self.__class__(
+                    length=self.length,
+                    maximum=self.maximum,
+                    current=sub_current,
+                    increment=sub_increment,
+                    message=self.message,
+                    pre=self.pre,
+                    post=self.post,
+                    block=self.block,
+                    empty=self.empty,
+                    stream=self.stream,
+                    **args)
 
 if __name__ == "__main__":
     import time
