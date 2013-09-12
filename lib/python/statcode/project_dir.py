@@ -87,7 +87,12 @@ class ProjectDir(object):
 
         dirnames = []
         filenames = []
-        for name in os.listdir(self.dirpath):
+        try:
+            names = os.listdir(self.dirpath)
+        except OSError as e:
+            names = ()
+            pass
+        for name in names:
             pathname = os.path.join(self.dirpath, name)
             realpathname = os.path.realpath(pathname)
             if os.path.isdir(realpathname):

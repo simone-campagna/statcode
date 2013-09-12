@@ -76,19 +76,26 @@ class ProjectFile(object):
             num_lines = 0
             num_bytes = 0
             newline = b'\n'
-            with open(self.filepath, 'rb') as filehandle:
-                last_block = None
-                while True:
-                    block = filehandle.read(block_size)
-                    if not block:
-                        break
-                    last_block = block
-                    num_bytes += len(block)
-                    num_lines += block.count(newline)
-                if last_block and last_block[-1] != newline:
-                    num_lines += 1
-                self.file_stats = FileStats(lines=num_lines, bytes=num_bytes)
-                
+            try:
+                with open(self.filepath, 'rb') as filehandle:
+                    last_block = None
+                    while True:
+                        block = filehandle.read(block_size)
+                        if not block:
+                            break
+                        last_block = block
+                        num_bytes += len(block)
+                        num_lines += block.count(newline)
+                    if last_block and last_block[-1] != newline:
+                        num_lines += 1
+                    self.file_stats = FileStats(lines=num_lines, bytes=num_bytes)
+            except (OSError, IOError) as e:
+                self.filetype = FileTypeClassifier.FILETYPE_UNREADABLE
+                self.file_stats = FileStats()
+                try:
+                    self.file_stats.bytes += os.stat(self.filepath).st_size
+                except:
+                    pass
             #if self.filetype_classifier.filetype_is_binary(self.filetype):
             #    self.file_stats = FileStats(bytes=os.stat(self.filepath).st_size)
             #else:
