@@ -103,10 +103,14 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
                 matching_categories = set(categories).difference(matching_categories)
             if action == 'hide':
                 hidden_categories.update(matching_categories)
+            elif action == 'show':
+                hidden_categories.difference_update(matching_categories)
             elif action == 'collapse':
                 collapsed_categories.update(matching_categories)
+            elif action == 'expand':
+                collapsed_categories.difference_update(matching_categories)
             else:
-                assert False
+                assert False, action
 
         category_filetypes = []
         category_d = collections.defaultdict(list)
@@ -144,7 +148,10 @@ class BaseProject(BaseTree, metaclass=abc.ABCMeta):
         #print(filetypes)
         #input("...")
 
+        #print(category_actions)
         category_filetypes = self._category_filetypes(filetypes, category_actions)
+        #print(category_filetypes)
+        #input("...")
 
         for category, filetypes in category_filetypes:
             if len(filetypes) == 1:

@@ -77,6 +77,7 @@ class ProjectDir(object):
 
     def pre_classify(self):
         real_dirpath = os.path.realpath(self.dirpath)
+        self.progress_bar = None
         if not os.path.isdir(real_dirpath):
             return
 

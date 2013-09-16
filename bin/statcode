@@ -45,8 +45,14 @@ Show statistics about a source code project.
     def collapse_category(category):
         return ('collapse', category)
 
+    def expand_category(category):
+        return ('expand', category)
+
     def hide_category(category):
         return ('hide', category)
+
+    def show_category(category):
+        return ('show', category)
 
     config_file = os.path.join(STATCODE_HOME_DIR, 'etc', 'statcode', 'statcode.ini')
     config_files = []
@@ -87,7 +93,7 @@ Show statistics about a source code project.
         nargs='+',
         help='list files for the chosen filetypes')
 
-    parser.add_argument("--collapse-category", "-C",
+    parser.add_argument("--collapse", "-C",
         dest='category_actions',
         metavar="C",
         type=collapse_category,
@@ -95,15 +101,16 @@ Show statistics about a source code project.
         default=default_category_actions,
         help='collapse categories matching with given pattern)')
 
-#    parser.add_argument("--expand-category", "-E",
-#        dest='category_actions',
-#        metavar="C",
-#        type=expand_category,
-#        action="append",
-#        default=default_category_actions,
-#        help='expand categories matching with given pattern)')
+    parser.add_argument("--expand", "-E",
+        dest='category_actions',
+        metavar="C",
+        type=expand_category,
+        action="append",
+        default=default_category_actions,
+        help='expand categories matching with given pattern)')
 
-    parser.add_argument("--hide-category", "-H",
+
+    parser.add_argument("--hide", "-H",
         dest='category_actions',
         metavar="C",
         type=hide_category,
@@ -111,14 +118,15 @@ Show statistics about a source code project.
         default=default_category_actions,
         help='hide categories matching with given pattern)')
 
-    parser.add_argument("--expand-categories", "-E",
+    parser.add_argument("--show", "-S",
         dest='category_actions',
-        metavar="F",
-        nargs='+',
-        default=['!language'],
-        help='group/expand categories matching with given pattern(s)')
+        metavar="C",
+        type=show_category,
+        action="append",
+        default=default_category_actions,
+        help='show categories matching with given pattern)')
 
-    parser.add_argument("--select-filetypes", "-S",
+    parser.add_argument("--select-filetypes", "-F",
         dest='select_filetypes',
         metavar="L",
         nargs='+',
