@@ -36,7 +36,8 @@ class FileTypeClassifier(object):
     BINARY_FILES = {FILETYPE_DATA}
     NON_EXISTENT_FILES = {FILETYPE_BROKEN_LINK, FILETYPE_NO_FILE, FILETYPE_UNREADABLE}
     DEFAULT_CATEGORY = FileTypeConfig.DEFAULT_CATEGORY
-    def __init__(self, filetype_config, qualifier_config):
+    def __init__(self, filetype_config, qualifier_config, parameters):
+        self._parameters = dict(parameters)
         self._file_extensions = collections.defaultdict(set)
         self._file_extension_names = collections.defaultdict(set)
         self._file_extension_matchers = collections.defaultdict(set)
@@ -46,7 +47,9 @@ class FileTypeClassifier(object):
         self._interpreter_matchers = collections.defaultdict(set)
         self._binary_filetypes = set()
         self._filetype_category = collections.defaultdict(lambda : self.DEFAULT_CATEGORY)
-        self._keyword_res = collections.defaultdict(set)
+        self._filetype_keywords = {}
+        self._keyword_res = {}
+        self._keyword_filetypes = collections.defaultdict(set)
 
         # from filetype_config
         for filetype in filetype_config.sections():
@@ -79,18 +82,20 @@ class FileTypeClassifier(object):
                 else:
                     self._interpreter_names[pattern].add(filetype)
 
-            keyword_res = self._keyword_res[filetype]
+            keywords = set()
             for keyword in filetype_config.string_to_list(section['keywords']):
-                keyword_re = self._get_keyword_re(keyword)
-                keyword_res.add(keyword_re)
+                self._keyword_filetypes[keyword].add(filetype)
+                keywords.add(keyword)
+                if not keyword in self._keyword_res:
+                    keyword_re = re.compile("(?<!\w)" + re.escape(keyword) + "(?!\w)")
+                    self._keyword_res[keyword] = keyword_re
+            self._filetype_keywords[filetype] = keywords
 
         # from qualifier_config
         self._qualifier = {}
         for extension in qualifier_config.sections():
             self._qualifier[os.path.extsep + extension] = qualifier_config.get_extension(extension)
  
-    def _get_keyword_re(self, keyword):
-        return re.compile("(?<!\w)" + re.escape(keyword) + "(?!\w)")
 
     def get_category(self, filetype):
         return self._filetype_category[filetype]
@@ -166,42 +171,77 @@ class FileTypeClassifier(object):
         except IOError:
             return self.FILETYPE_UNREADABLE
 
+    def _sorted_filetype_scores(self, filetypes, keyword_scores):
+        filetype_scores = []
+        for filetype in filetypes:
+            filetype_score = 0
+            for keyword in self._filetype_keywords[filetype]:
+                filetype_score += keyword_scores[keyword]
+            filetype_scores.append((filetype, filetype_score))
+        filetype_scores.sort(key=lambda x: x[1], reverse=True)
+        return filetype_scores
+                
     def classify_by_content_filehandle(self, restrict_filetypes, filepath, filehandle):
         if len(restrict_filetypes) == 1:
             return {next(iter(restrict_filetypes))}
 
-        scores = collections.defaultdict(lambda : 0)
-        min_lines = 100
-        max_ratio = 0.3
-        min_score = 50
+        min_lines = self._parameters['min_lines']
+        max_lines = self._parameters['max_lines']
+        max_ratio = self._parameters['max_ratio']
+        score_ratio = self._parameters['score_ratio']
+        block_lines = self._parameters['block_lines']
         num_lines = 0
+        keywords = set()
+        keyword_filetypes = {}
+        filetypes = set()
+        for filetype in restrict_filetypes:
+            filetype_keywords = self._filetype_keywords[filetype]
+            if filetype_keywords:
+                filetypes.add(filetype)
+                keywords.update(filetype_keywords)
+        for keyword in keywords:
+            keyword_filetypes[keyword] = self._keyword_filetypes[keyword].intersection(filetypes)
+        keyword_res = self._keyword_res
+        keyword_scores = dict((keyword, 0) for keyword in keywords)
+        non_keyword_filetypes = set(restrict_filetypes).difference(filetypes)
+
         for line in filehandle:
-            for filetype in restrict_filetypes:
+            for keyword in keywords:
+                keyword_re = keyword_res[keyword]
                 score = 0
-                for keyword_re in self._keyword_res[filetype]:
-                    for m in keyword_re.finditer(line):
-                        score += 1
-                scores[filetype] += score
+                for m in keyword_re.finditer(line):
+                    score += 1
+                keyword_scores[keyword] += 1
             num_lines += 1
-            if num_lines > min_lines:
-                l = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-                first, first_score = l[0]
-                second, second_score = l[1]
+            if num_lines > min_lines and (num_lines % block_lines == 0):
+                filetype_scores = self._sorted_filetype_scores(filetypes, keyword_scores)
+                first, first_score = filetype_scores[0]
+                second, second_score = filetype_scores[1]
                 if first_score:
                     if second_score:
+                        #print("!", filetype_scores, first_score, second_score, second_score / first_score)
                         if second_score / first_score < max_ratio:
+                            #print("A", filepath, repr(first), first_score, repr(second), second_score)
                             return {first}
                     else:
-                        if first_score > min_score:
+                        if first_score > num_lines * score_ratio:
+                            #print("B", filepath, repr(first), first_score, repr(second), second_score)
                             return {first}
-        l = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        first, first_score = l[0]
-        result = set()
-        for filetype, score in l:
-            if score != first_score:
+            if num_lines > max_lines:
                 break
-            result.add(filetype)
-        return result
+        filetype_scores = self._sorted_filetype_scores(filetypes, keyword_scores)
+        first, first_score = filetype_scores[0]
+        if first_score >= num_lines * score_ratio:
+            result = set()
+            for filetype, score in filetype_scores:
+                if score != first_score:
+                    break
+                result.add(filetype)
+            #print("C", filepath, repr(first), first_score, num_lines)
+            return result
+        else:
+            #print("D", filepath, repr(first), first_score, num_lines)
+            return non_keyword_filetypes
 
     def classify_by_shebang(self, filehandle, filepath, filename):
         try:

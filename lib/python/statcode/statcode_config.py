@@ -33,6 +33,13 @@ class StatCodeConfig(Config):
     __keys__ = list(__key_class__.keys())
     __sections__ = {
         'config_files': dict((key, '') for key in __keys__),
+        'parameters': {
+            'min_lines': 30,
+            'max_lines': 500,
+            'max_ratio': 1.0,
+            'score_ratio': 0.1,
+            'block_lines': 20,
+        }
     }
 
     def _absolute_config_files(self, key):

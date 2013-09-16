@@ -66,7 +66,13 @@ class ProjectConfiguration(object):
         self.filetype_config = self.config.get_filetype_config()
         self.qualifier_config = self.config.get_qualifier_config()
         self.directory_config = self.config.get_directory_config()
-        self.filetype_classifier = FileTypeClassifier(self.filetype_config, self.qualifier_config)
+        self.parameters = {}
+        self.parameters['min_lines'] = config.getint('parameters', 'min_lines')
+        self.parameters['max_lines'] = config.getint('parameters', 'max_lines')
+        self.parameters['max_ratio'] = config.getfloat('parameters', 'max_ratio')
+        self.parameters['score_ratio'] = config.getfloat('parameters', 'score_ratio')
+        self.parameters['block_lines'] = config.getint('parameters', 'block_lines')
+        self.filetype_classifier = FileTypeClassifier(self.filetype_config, self.qualifier_config, self.parameters)
 
 class BaseProject(BaseTree, metaclass=abc.ABCMeta):
     def __init__(self, configuration, name):
