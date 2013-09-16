@@ -46,6 +46,8 @@ class FileTypeClassifier(object):
         self._interpreter_matchers = collections.defaultdict(set)
         self._binary_filetypes = set()
         self._filetype_category = collections.defaultdict(lambda : self.DEFAULT_CATEGORY)
+        self._keyword_res = collections.defaultdict(set)
+
         # from filetype_config
         for filetype in filetype_config.sections():
             section = filetype_config[filetype]
@@ -77,11 +79,19 @@ class FileTypeClassifier(object):
                 else:
                     self._interpreter_names[pattern].add(filetype)
 
+            keyword_res = self._keyword_res[filetype]
+            for keyword in filetype_config.string_to_list(section['keywords']):
+                keyword_re = self._get_keyword_re(keyword)
+                keyword_res.add(keyword_re)
+
         # from qualifier_config
         self._qualifier = {}
         for extension in qualifier_config.sections():
             self._qualifier[os.path.extsep + extension] = qualifier_config.get_extension(extension)
  
+    def _get_keyword_re(self, keyword):
+        return re.compile("(?<!\w)" + re.escape(keyword) + "(?!\w)")
+
     def get_category(self, filetype):
         return self._filetype_category[filetype]
 
@@ -102,7 +112,7 @@ class FileTypeClassifier(object):
         if filetypes is None:
             try:
                 with open(filepath, 'r') as filehandle:
-                    filetypes = self.classify_by_content(filehandle, filepath, filename)
+                    filetypes = self.classify_by_shebang(filehandle, filepath, filename)
             except UnicodeDecodeError:
                 filetypes = {self.FILETYPE_DATA}
             except IOError:
@@ -147,8 +157,51 @@ class FileTypeClassifier(object):
                 return filetypes
         return None
 
-    def classify_by_content(self, filehandle, filepath, filename):
-        return self.classify_by_shebang(filehandle, filepath, filename)
+    def classify_by_content(self, restrict_filetypes, filepath):
+        try:
+            with open(filepath, 'r') as filehandle:
+                return self.classify_by_content_filehandle(restrict_filetypes, filepath, filehandle)
+        except UnicodeDecodeError:
+            return self.FILETYPE_DATA
+        except IOError:
+            return self.FILETYPE_UNREADABLE
+
+    def classify_by_content_filehandle(self, restrict_filetypes, filepath, filehandle):
+        if len(restrict_filetypes) == 1:
+            return {next(iter(restrict_filetypes))}
+
+        scores = collections.defaultdict(lambda : 0)
+        min_lines = 100
+        max_ratio = 0.3
+        min_score = 50
+        num_lines = 0
+        for line in filehandle:
+            for filetype in restrict_filetypes:
+                score = 0
+                for keyword_re in self._keyword_res[filetype]:
+                    for m in keyword_re.finditer(line):
+                        score += 1
+                scores[filetype] += score
+            num_lines += 1
+            if num_lines > min_lines:
+                l = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+                first, first_score = l[0]
+                second, second_score = l[1]
+                if first_score:
+                    if second_score:
+                        if second_score / first_score < max_ratio:
+                            return {first}
+                    else:
+                        if first_score > min_score:
+                            return {first}
+        l = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        first, first_score = l[0]
+        result = set()
+        for filetype, score in l:
+            if score != first_score:
+                break
+            result.add(filetype)
+        return result
 
     def classify_by_shebang(self, filehandle, filepath, filename):
         try:

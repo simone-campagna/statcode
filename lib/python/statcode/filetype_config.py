@@ -23,9 +23,10 @@ class FileTypeConfig(Config):
     DEFAULT_CATEGORY = '{no-category}'
     __defaults__ = {
         'binary': 'False',
-        'category': '',
+        'category': DEFAULT_CATEGORY,
         'file_extensions': '',
         'file_patterns': '',
-        'interpreter_patterns': DEFAULT_CATEGORY,
+        'interpreter_patterns': '',
+        'keywords': '',
     }
 

@@ -6,8 +6,11 @@ Statcode is configurable, so that new file types can easily be added.
 
 In order to classify a file, currently statcode analyzes:
 * the file name (extension or pattern)
-* the file content (only the shebang line)
-So currently statcode does not really classify files bases on generic content. In the future it should be able to detect the language of a file by searching known patterns in its content.
+* the file content
+  * the shebang line, for interpreted languages
+  * any keyword, for any filetype.
+
+All the keywords/patterns are defined in configuration files, so statcode is highly configurable, and new filetypes can easily be added without changing the code.
 
 File types are collected in categories (for instance, 'language', 'data', 'audio', ...; 'c++' and 'python' are filetypes belonging to the 'language' category, while 'mp3' is an 'audio' filetype').
 

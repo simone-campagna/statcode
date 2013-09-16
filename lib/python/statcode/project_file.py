@@ -52,21 +52,26 @@ class ProjectFile(object):
             if self._filetypes is None:
                 self.filetype = FileTypeClassifier.FILETYPE_UNCLASSIFIED
             else:
-                project_dir = self.project_dir
-                while project_dir:
-                    for filetype in project_dir.most_common_filetypes():
-                        assert not filetype in FileTypeClassifier.NO_FILETYPE_FILES
-                        if filetype in self._filetypes:
-                            self.filetype = filetype
-                            #print("HERE A: ", self.filepath, self._filetypes, self.filetype, project_dir.dirpath)
-                            break
-                    else:
-                        project_dir = project_dir.parent
-                        continue
-                    break
-                else:
+                self._filetypes = self.filetype_classifier.classify_by_content(self._filetypes, self.filepath)
+                if len(self._filetypes) == 1:
                     self.filetype = next(iter(self._filetypes))
-                    #print("HERE Z: ", self.filepath, self._filetypes, self.filetype)
+                else:
+                    project_dir = self.project_dir
+                    while project_dir:
+                        for filetype in project_dir.most_common_filetypes():
+                            assert not filetype in FileTypeClassifier.NO_FILETYPE_FILES
+                            if filetype in self._filetypes:
+                                self.filetype = filetype
+                                #print("HERE A: ", self.filepath, self._filetypes, self.filetype, project_dir.dirpath)
+                                break
+                        else:
+                            project_dir = project_dir.parent
+                            continue
+                        break
+                    else:
+                        #self.filetype = next(iter(self._filetypes))
+                        self.filetype = next(iter(self._filetypes))
+                        #print("HERE Z: ", self.filepath, self._filetypes, self.filetype)
 
         # stats
         if self.filetype in FileTypeClassifier.NON_EXISTENT_FILES:

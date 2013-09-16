@@ -55,16 +55,44 @@ class Config(configparser.ConfigParser):
                 self.write(f_out)
 
     @classmethod
+    def wrap(cls, item):
+        if ':' in item:
+            return repr(item)
+        else:
+            return item
+
+    @classmethod
+    def consume(cls, text):
+        for string_type in '"""', "'''", '"', "'":
+            if text.startswith(string_type):
+                index = text.find(string_type, len(string_type))
+                if index < 0:
+                    raise ValueError("unterminated string {!r}: matching {!r} not found".format(text, string_type))
+                remaining = text[index + len(string_type):].lstrip()
+                if remaining and not remaining.startswith(':'):
+                    raise ValueError("invalid string {!r}: found {!r} before ':'".format(text, remaining.split(':', 1)[0]))
+                token = text[len(string_type):index]
+                return token, remaining
+        else:
+            l = text.split(':', 1)
+            if len(l) == 1:
+                return l[0], ''
+            else:
+                return l
+
+    @classmethod
     def list_to_string(cls, lst):
-        return ':'.join(lst)
+        return ':'.join(cls.wrap(item) for item in lst)
 
     @classmethod
     def string_to_list(cls, s):
-        s = s.strip()
-        if s:
-            return s.split(':')
-        else:
-            return []
+        tokens = []
+        while s:
+            s = s.strip()
+            x = cls.consume(s)
+            token, s = cls.consume(s)
+            tokens.append(token)
+        return tokens
 
     @classmethod
     def bool_to_string(cls, b):
