@@ -49,11 +49,13 @@ class ProjectFile(object):
 #        if self.filepath.endswith(".h"):
 #            print("***", self.filepath, self.filetype, self._filetypes)
         if self.filetype is None:
-            if self._filetypes is None:
+            if not self._filetypes:
                 self.filetype = FileTypeClassifier.FILETYPE_UNCLASSIFIED
             else:
                 self._filetypes = self.filetype_classifier.classify_by_content(self._filetypes, self.filepath)
-                if len(self._filetypes) == 1:
+                if len(self._filetypes) == 0:
+                    self.filetype = FileTypeClassifier.FILETYPE_UNCLASSIFIED
+                elif len(self._filetypes) == 1:
                     self.filetype = next(iter(self._filetypes))
                 else:
                     project_dir = self.project_dir

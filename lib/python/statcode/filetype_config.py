@@ -28,5 +28,6 @@ class FileTypeConfig(Config):
         'file_patterns': '',
         'interpreter_patterns': '',
         'keywords': '',
+        'regular_expressions': '',
     }
 
